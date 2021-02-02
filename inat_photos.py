@@ -432,8 +432,9 @@ class iNat2LocalImages:
     IMG_EXTS = ['jpg', 'jpeg', 'png', 'tif', 'tiff']
 
     def __init__(self, user_login, captions, recompute,
-                 cluster_threshold, ssim_threshold):
+                 cluster_threshold, ssim_threshold, bypass_cache):
         self.user_login = user_login
+        self.bypass_cache = bypass_cache
         self.captions = captions
         self.recompute = recompute
         self.localPicts = {}
@@ -556,7 +557,8 @@ class iNat2LocalImages:
         page = 1
         photos = []
         while True:
-            results = get_observations(page=page, per_page=100,
+            results = get_observations(bypass_cache=self.bypass_cache,
+                                       page=page, per_page=100,
                                        user_login=user_login,
                                        photos='true', day=date[8:],
                                        month=date[5:7], year=date[:4])
@@ -1092,17 +1094,20 @@ if __name__ == '__main__':
                         help='iNaturalist user login')
     parser.add_argument('--cluster_threshold', type=clusterCheck,
                         required=False, default=CLUSTER_THRESHOLD,
-                        help='threshold used in clusters based on times')
+                        help='threshold used in clusters based on time of day')
     parser.add_argument('--ssim_threshold', type=ssimCheck,
                         required=False, default=SSIM_THRESHOLD,
                         help='structural similarity score threshold to accept '
-                        'matches.')
+                        'candidates')
+    parser.add_argument('--bypass_cache', '-b', action="store_true",
+                        help='do not use cached api responses even if '
+                        'they have not yet expired')
     parser.add_argument('--captions', '-c', action="store_true",
                         help='save identifications as captions')
     parser.add_argument('--recompute', '-r', action="store_true",
                         help='recompute already known mappings for photos')
     parser.add_argument('--logfile', type=argparse.FileType('w'),
-                        help='write html logfile.')
+                        help='write html logfile')
     parser.add_argument('pictures', type=argCheck, nargs='+',
                         metavar='file/directory',
                         help='picture files or directories')
@@ -1111,6 +1116,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     inat2imgs = iNat2LocalImages(args.user, args.captions, args.recompute,
-                                 args.cluster_threshold, args.ssim_threshold)
+                                 args.cluster_threshold, args.ssim_threshold,
+                                 args.bypass_cache)
 
     inat2imgs.process(args.pictures, args.logfile)
