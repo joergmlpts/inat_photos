@@ -915,7 +915,6 @@ class iNat2LocalImages:
                     self.no_caption_new += 1
                 else:
                     self.no_caption_updates += 1
-                self.no_caption_updates += 1
                 print(f"{localPic.getFilename()}: Updating caption from "
                       f"'{caption}' to '{identification}'.")
                 args.append(('-Caption-Abstract='+identification).encode())
@@ -1105,7 +1104,7 @@ if __name__ == '__main__':
     parser.add_argument('--captions', '-c', action="store_true",
                         help='save identifications as captions')
     parser.add_argument('--recompute', '-r', action="store_true",
-                        help='recompute already known mappings for photos')
+                        help='recompute already known associations for photos')
     parser.add_argument('--logfile', type=argparse.FileType('w'),
                         help='write html logfile')
     parser.add_argument('pictures', type=argCheck, nargs='+',
