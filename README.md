@@ -14,7 +14,7 @@ and like this on Windows
 python.exe .\inat_photos.py --user joergmlpts --captions --logfile mylogfile.html .\example_pictures
 ```
 
-where `joergmlpts` is a user login on iNaturalist, `--captions` requests that captions will be updated with iNaturalist identifications, a logfile called `mylogfile.html` will be written, and `example_pictures` is a directory of pictures.
+where `joergmlpts` is a user login on iNaturalist, `--captions` requests captions to be updated with iNaturalist identifications, a logfile called `mylogfile.html` will be written, and `example_pictures` is a directory of pictures.
 
 `inat_photos.py` will read all pictures in `example_pictures` and its subdirectories, will look up iNaturalist observations for these pictures and annotate the pictures with their location on iNaturalist (the observation and photo ids) and will store the identifications from iNaturalist as captions. The example run looks like this:
 
@@ -75,7 +75,7 @@ For me, `pyexiftool` did not work on Windows after I installed it with `pip` as 
 pip uninstall pyexiftool
 ```
 
-and installing first [`git` for Windows](https://gitforwindows.org/) and finally the most recent `pyexiftool` from `github`:
+and then first installing [git for Windows](https://gitforwindows.org/) and finally the most recent `pyexiftool` from `github`:
 
 ```
 pip install git+https://github.com/smarnach/pyexiftool.git
