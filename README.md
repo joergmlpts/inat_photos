@@ -35,7 +35,7 @@ The html logfile allows to manually verify that the correct photos have been fou
 
 ## Dependencies
 
-This code has been written in Python3. It used f-strings and hence needs Python 3.6 or later. It requires `exiftool` to read and write the metadata of pictures. All necessary packages can be installed on Ubuntu Linux (and likely all other Debian-style distributions) with these two commands:
+This code has been written in Python3. It uses f-strings and hence needs Python 3.6 or later. It requires `exiftool` to read and write the metadata of pictures. All necessary packages can be installed on Ubuntu Linux (and likely all other Debian-style distributions) with these two commands:
 
 ```
 sudo apt install python3 python3-pip python3-requests python3-pil python3-scipy python3-pyopencl libimage-exiftool-perl
