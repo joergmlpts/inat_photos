@@ -208,7 +208,7 @@ associations between local and iNaturalist photos and recompute them.
 
 ## Constants in the Code
 
-In addition to command-line option, constants in the code can also be modified. The constants are found near the top of the file:
+A few constants in the code can also be customized. The constants are found near the top of the file:
 
 ```
 USE_GPU = False             # change to True if you have a GPU
@@ -221,9 +221,12 @@ SSIM_INATSIZE     = 'large' # iNaturalist picture size to use with ssim
 CACHE_EXPIRATION  = 14 * 24 * 3600  # cache expires after 2 weeks
 ```
 
-The constants `CLUSTER_THRESHOLD` and `SSIM_THRESHOLD` are the defaults for options `--cluster_threshold` and `--ssim_threshold`.
+The constants `CLUSTER_THRESHOLD` and `SSIM_THRESHOLD` are the defaults for
+options `--cluster_threshold` and `--ssim_threshold`.
 
-Constant `USE_GPU` can be set to `True` to compute structural similarity scores with GPU support. That should provide a runtime boost.
+Constant `USE_GPU` can be set to `True` to compute structural similarity scores
+with GPU support. That setting should provide a runtime boost but requires
+hardware support, e.g. a system with a GPU.
 
 Constant `SSIM_INATSIZE` is the iNaturalist photo size to be downloaded to
 compute structural similarity scores. The default is `large` which results in
@@ -234,5 +237,7 @@ lowered as well, e.g. `SSIM_INATSIZE = 'small'` and `SSIM_THRESHOLD = 0.8` is a
 setting that provides a very noticable speedup while still finding roughly the
 same number of associations.
 
-Constant `CACHE_EXPIRATION` is the age in seconds before a cache entry expires.
-The default is 14 days. Lowering this number causes more network traffic.
+Constant `CACHE_EXPIRATION` is the age in seconds when a cache entry of an
+iNaturalist observation expires. The default is 14 days. Lowering this number
+increases network traffic. Command-line option `--bypass_cache` is an
+alternative to modifying this constant.
