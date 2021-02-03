@@ -971,7 +971,7 @@ class iNat2LocalImages:
               '<td style="text-align:center"><b>Structural</b></td></tr>',
               file=self.logfile)
         print('<tr><td style="text-align:center"><b>Local File</b></td>'
-              '<td style="text-align:center"><b>iNat photo</b></td>'
+              '<td style="text-align:center"><b>iNaturalist Photo</b></td>'
               '<td style="text-align:center"><b>Observation</b></td>'
               '<td style="text-align:center"><b>Observation</b></td>'
               '<td style="text-align:center"><b>Observation</b></td>'
