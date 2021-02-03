@@ -25,10 +25,10 @@ captions to be updated with iNaturalist identifications, a logfile called
 `mylogfile.html` will be written, and `example_pictures` is a directory of
 pictures.
 
-`inat_photos.py` will read all pictures in `example_pictures` and its
-subdirectories, will look up iNaturalist observations for these pictures and
-annotate the pictures with their location on iNaturalist (the observation and
-photo ids) and will store the identifications from iNaturalist as captions. The
+`inat_photos.py` reads all pictures in `example_pictures` and its
+subdirectories, looks up iNaturalist observations for these pictures and
+annotates the pictures with their location on iNaturalist (the observation and
+photo ids) and stores the identifications from iNaturalist as captions. The
 example run looks like this:
 
 ```
