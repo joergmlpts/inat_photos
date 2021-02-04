@@ -489,15 +489,14 @@ class iNat2LocalImages:
 
         if 'EXIF:DateTimeOriginal' in metadata:
             exifDateTime = metadata['EXIF:DateTimeOriginal']
-            exifDateTime = exifDateTime[:10].replace(':', '-') + \
-                           exifDateTime[10:]
         else:
+            exifDateTime = metadata['File:FileModifyDate'][:19]
             if self.dots:
                 print()
                 self.dots = False
-            print(f"Ignoring '{fullPath}'; EXIF tag "
-                  "'Date/Time Original' is missing.")
-            return
+            print(f"'{fullPath}': EXIF tag 'Date/Time Original' is missing; "
+                  f"using file modification time '{exifDateTime}'.")
+        exifDateTime = exifDateTime[:10].replace(':', '-') + exifDateTime[10:]
 
         if 'IPTC:Caption-Abstract' in metadata:
             caption = metadata['IPTC:Caption-Abstract']
@@ -862,7 +861,7 @@ class iNat2LocalImages:
         if iNatPic is None:
             caption = localPic.getCaption()
             caption = ", caption '" + caption + "'" if caption else ''
-            print("Not associated with an iNat picture: "
+            print("Not associated with an iNaturalist photo: "
                   f"'{localPic}'{caption}.")
             self.no_unmatched_localPhotos += 1
             return
