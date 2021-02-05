@@ -1,11 +1,13 @@
 # inat_photos
 
 I have uploaded some of my photos to [iNaturalist](https://www.inaturalist.org)
-where a community identifies plants, animals, mushrooms and other life forms.
-This script `inat_photos.py` reads my photos and finds the ones that have been
-uploaded to iNaturalist. It then annotatates my local photos with their location
-on iNaturalist (the observation and photo ids). It also pulls the
-identifications from iNaturalist and stores them as captions of my local photos.
+where a community of naturalists identifies plants, animals, mushrooms and
+other organisms.
+This script `inat_photos.py` reads offline photos and finds the ones that have
+been uploaded to iNaturalist. It then annotatates these local photos with their
+location on iNaturalist (the observation and photo ids). It also pulls the
+identifications from iNaturalist and stores them as captions of the
+local photos.
 
 `inat_photos.py` is a command-line tool that has been tested on Linux and
 Windows 10. It can be called as this on Linux
@@ -20,16 +22,16 @@ and like this on Windows
 python.exe .\inat_photos.py --user joergmlpts --captions --logfile mylogfile.html .\example_pictures
 ```
 
-where `joergmlpts` is a user login on iNaturalist, `--captions` requests
+where `joergmlpts` is a user login for iNaturalist, `--captions` requests
 captions to be updated with iNaturalist identifications, a logfile called
 `mylogfile.html` will be written, and `example_pictures` is a directory of
 pictures.
 
 `inat_photos.py` reads all pictures in `example_pictures` and its
-subdirectories, looks up iNaturalist observations for these pictures and
+subdirectories, downloads iNaturalist observations for these pictures,
 annotates the pictures with their location on iNaturalist (the observation and
-photo ids) and stores the identifications from iNaturalist as captions. The
-example run looks like this:
+photo ids) and stores the identifications from iNaturalist as photo captions.
+The example run looks like this:
 
 ```
 Loading photos 
@@ -188,10 +190,10 @@ or 95%.
 
 ### Option -b, --bypass_cache
 
-By default, `inat_photo.py` caches iNaturalist observations for 14 days before
+By default, `inat_photo.py` caches iNaturalist observations for 8 hours before
 they will be loaded again. Options `-b` and `--bypass_cache` instruct
-`inat_photo.py` to bypass the cache and issue api calls to load iNaturalist
-observations right away.
+`inat_photo.py` to bypass the cache and issue api calls to re-load iNaturalist
+observations.
 
 ### Option -c, --captions
 
@@ -211,14 +213,14 @@ associations between local and iNaturalist photos and recompute them.
 A few constants in the code can also be customized. The constants are found near the top of the file:
 
 ```
-USE_GPU = False             # change to True if you have a GPU
+USE_GPU = False               # change to True if you have a GPU
 
-CLUSTER_THRESHOLD = 180     # 3 minutes
-SSIM_THRESHOLD    = 0.95    # 95%, ssim threshold to consider pictures identical
+CLUSTER_THRESHOLD = 180       # 3 minutes
+SSIM_THRESHOLD    = 0.95      # 95%, ssim threshold to consider pictures identical
 
-SSIM_INATSIZE     = 'large' # iNaturalist picture size to use with ssim
+SSIM_INATSIZE     = 'large'   # iNaturalist picture size to use with ssim
 
-CACHE_EXPIRATION  = 14 * 24 * 3600  # cache expires after 2 weeks
+CACHE_EXPIRATION  = 8 * 3600  # cache expires after 8 hours
 ```
 
 The constants `CLUSTER_THRESHOLD` and `SSIM_THRESHOLD` are the defaults for
@@ -238,7 +240,7 @@ needs to be lowered as well, e.g. `SSIM_INATSIZE = 'small'` and
 while still finding roughly the same number of associations.
 
 Constant `CACHE_EXPIRATION` is the age in seconds when a cache entry of an
-iNaturalist observation expires. The default is 14 days. Lowering this number
+iNaturalist observation expires. The default is 8 hours. Lowering this number
 increases network traffic. Command-line option `--bypass_cache` is an
 alternative to customizing this constant.
 

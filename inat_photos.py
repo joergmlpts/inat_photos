@@ -26,7 +26,7 @@ THUMBNAIL_MAX = (256, 256)
 API_HOST   = "https://api.inaturalist.org/v1"
 PHOTO_HOST = "https://static.inaturalist.org/photos"
 
-CACHE_EXPIRATION  = 14 * 24 * 3600  # cache expires after 2 weeks
+CACHE_EXPIRATION  = 8 * 3600  # cache expires after 8 hours
 
 TOO_MANY_API_CALLS_DELAY = 60   # wait this many seconds after error 429
 
