@@ -352,12 +352,14 @@ class iNatPhoto(Photo):
 # Thumbnails, if present, are loaded instead of large pictures.
 class LocalPhoto(Photo):
 
-    def __init__(self, filename, dateTime, orientation, caption, userComment,
-                 thumbnailOffset, thumbnailLength, latitude, longitude):
+    def __init__(self, filename, dateTime, orientation, subject, caption,
+                 userComment, thumbnailOffset, thumbnailLength, latitude,
+                 longitude):
         super().__init__()
         self.filename = filename
         self.dateTime = datetime.fromisoformat(dateTime)
         self.orientation = orientation
+        self.subject = subject
         self.caption = caption
         self.userComment = userComment
         self.thumbnailOffset = thumbnailOffset
@@ -417,6 +419,9 @@ class LocalPhoto(Photo):
     def getDate(self):
         return self.dateTime.date()
 
+    def getSubject(self):
+        return self.subject
+
     def getCaption(self):
         return self.caption
 
@@ -444,8 +449,9 @@ class iNat2LocalImages:
         self.logfile = None
         self.cluster_threshold = cluster_threshold
         self.ssim_threshold = ssim_threshold
-        self.no_inat_new = self.no_caption_new = 0
-        self.no_inat_updates = self.no_caption_updates = 0
+        self.no_inat_new = self.no_caption_new = self.no_subject_new = 0
+        self.no_inat_updates = self.no_caption_updates = \
+            self.no_subject_updates = 0
         self.no_unmatched_localPhotos = self.no_unmatched_iNatPhotos = 0
         self.exiftool_success = b'1 image files updated\r\n' \
                                 if sys.platform == 'win32' \
@@ -466,7 +472,7 @@ class iNat2LocalImages:
         if self.isDuplicate(fullPath):
             return
 
-        caption = orientation = exifDateTime = userComment = None
+        subject = caption = orientation = exifDateTime = userComment = None
         latitude = longitude = None
         metadata = self.exiftool.get_metadata(fullPath)
 
@@ -483,6 +489,9 @@ class iNat2LocalImages:
 
         if 'EXIF:Orientation' in metadata:
             orientation = metadata['EXIF:Orientation']
+
+        if 'XMP:Subject' in metadata:
+            subject = metadata['XMP:Subject']
 
         if 'EXIF:UserComment' in metadata:
             userComment = metadata['EXIF:UserComment']
@@ -507,8 +516,8 @@ class iNat2LocalImages:
             thumbnailOffset = metadata['EXIF:ThumbnailOffset']
             thumbnailLength = metadata['EXIF:ThumbnailLength']
 
-        picture = LocalPhoto(fullPath, exifDateTime, orientation, caption,
-                             userComment, thumbnailOffset,
+        picture = LocalPhoto(fullPath, exifDateTime, orientation, subject,
+                             caption, userComment, thumbnailOffset,
                              thumbnailLength, latitude, longitude)
 
         exifDate = exifDateTime[:10]
@@ -544,7 +553,8 @@ class iNat2LocalImages:
 
             if file.split('.')[-1].lower() in self.IMG_EXTS:
                 self.getLocalImage(fullPath)
-            elif not file.endswith('.gpx') and not file.endswith('_original'):
+            elif not file.endswith('.gpx') and not file.endswith('.db') \
+                 and not file.endswith('_original'):
                 if self.dots:
                     print()
                     self.dots = False
@@ -662,9 +672,8 @@ class iNat2LocalImages:
             iNatPics = []
             for iNatPic in sortediNatPics:
                 if iNatPic.getPhotoId() in skipPhotos:
-                    if self.captions:
-                        self.updateCaption(skipPhotos[iNatPic.getPhotoId()],
-                                           iNatPic)
+                    self.updateCaption(skipPhotos[iNatPic.getPhotoId()],
+                                       iNatPic)
                     skipped = True
                 else:
                     iNatPics.append(iNatPic)
@@ -874,6 +883,7 @@ class iNat2LocalImages:
             return
 
         identification = iNatPic.name()
+        subject = localPic.getSubject()
         caption = localPic.getCaption()
 
         timeDiff = abs(timeDifference(iNatPic, localPic))
@@ -909,8 +919,16 @@ class iNat2LocalImages:
 
         if ssimScore >= self.ssim_threshold:
             args = []
+            if (subject is None or subject != identification):
+                if subject is None:
+                    self.no_subject_new += 1
+                else:
+                    self.no_subject_updates += 1
+                print(f"{localPic.getFilename()}: Updating subject from "
+                      f"'{subject}' to '{identification}'.")
+                args.append(('-Subject='+identification).encode())
             if self.captions and (caption is None or caption != identification):
-                if caption is None or caption != identification:
+                if caption is None:
                     self.no_caption_new += 1
                 else:
                     self.no_caption_updates += 1
@@ -940,17 +958,29 @@ class iNat2LocalImages:
     # updates the caption of a local photo with the observation's identification
     def updateCaption(self, localPic, iNatPic):
         identification = iNatPic.name()
+        subject = localPic.getSubject()
         caption = localPic.getCaption()
-        if caption is None or caption != identification:
+        args = []
+        if (subject is None or subject != identification):
+            if subject is None:
+                self.no_subject_new += 1
+            else:
+                self.no_subject_updates += 1
+            print(f"{localPic.getFilename()}: Updating subject from "
+                  f"'{subject}' to '{identification}'.")
+            args.append(('-Subject='+identification).encode())
+        if self.captions and (caption is None or caption != identification):
             if caption is None:
                 self.no_caption_new += 1
             else:
                 self.no_caption_updates += 1
             print(f"{localPic.getFilename()}: Updating caption from "
                   f"'{caption}' to '{identification}'.")
-            rsl = self.exiftool.execute(
-                              ('-Caption-Abstract='+identification).encode(),
-                              b'-m', localPic.getFilename().encode())
+            args.append(('-Caption-Abstract='+identification).encode())
+        if len(args):
+            args.append(b'-m')
+            args.append(localPic.getFilename().encode())
+            rsl = self.exiftool.execute(*args)
             if rsl != self.exiftool_success:
                 raise Exception(f'exiftool error: {rsl.decode()}')
 
@@ -1042,7 +1072,7 @@ class iNat2LocalImages:
             print(f'</table><p>{summary}</p></html>', file=self.logfile)
 
 #
-# Parse command-line and invoke above functionality.
+# Checks for command-line arguments.
 #
 
 def userCheck(arg):
@@ -1084,6 +1114,10 @@ def argCheck(arg):
         return arg
     raise argparse.ArgumentTypeError(f"'{arg}' is not a picture file "
                                      "or directory.")
+
+#
+# Parse command-line and invoke above functionality.
+#
 
 if __name__ == '__main__':
 
