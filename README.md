@@ -6,7 +6,7 @@ other organisms.
 This script `inat_photos.py` reads offline photos and finds the ones that have
 been uploaded to iNaturalist. It then annotatates these local photos with their
 location on iNaturalist (the observation and photo ids). It also pulls the
-identifications from iNaturalist and stores them as captions of the
+identifications from iNaturalist and stores them as subjects and captions of the
 local photos.
 
 `inat_photos.py` is a command-line tool that has been tested on Linux and
@@ -30,30 +30,35 @@ pictures.
 `inat_photos.py` reads all pictures in `example_pictures` and its
 subdirectories, downloads iNaturalist observations for these pictures,
 annotates the pictures with their location on iNaturalist (the observation and
-photo ids) and stores the identifications from iNaturalist as photo captions.
-The example run looks like this:
+photo ids) and stores the identifications from iNaturalist as photo subjects and
+captions. The example run looks like this:
 
 ```
 Loading photos 
-Loaded 5 local photos in 0.2 secs.
+Loaded 5 local photos in 0.4 secs.
 2021-02-01: 7 iNat pictures and 5 local pictures.
-'example_pictures/dcsf0119_crop.jpg' without caption found for photo id 111827921; 'Coyote (Canis latrans)', time from observation 58 secs, distance from observation 0.00 meters, similarity 100.0%.
-example_pictures/dcsf0119_crop.jpg: Updating caption from 'None' to 'Coyote (Canis latrans)'.
-'example_pictures/dcsf0118.jpg' without caption found for photo id 111827898; 'Coyote (Canis latrans)', time from observation 7 secs, distance from observation 72.38 meters, similarity 98.4%.
-example_pictures/dcsf0118.jpg: Updating caption from 'None' to 'Coyote (Canis latrans)'.
-'example_pictures/dcsf0119.jpg' without caption found for photo id 111827912; 'Coyote (Canis latrans)', time from observation 58 secs, distance from observation 0.00 meters, similarity 98.7%.
-example_pictures/dcsf0119.jpg: Updating caption from 'None' to 'Coyote (Canis latrans)'.
-Not associated with a local picture: photo id 111827935, 2nd photo of observation https://www.inaturalist.org/observations/68980359, 'Coyote (Canis latrans)'.
+'./example_pictures/dcsf0119_crop.jpg' without caption found for photo id 111827921; 'Coyote (Canis latrans)', time from observation 58 secs, distance from observation 0.00 meters, similarity 100.0%.
+./example_pictures/dcsf0119_crop.jpg: Updating subject from 'None' to 'Coyote (Canis latrans)'.
+./example_pictures/dcsf0119_crop.jpg: Updating caption from 'None' to 'Coyote (Canis latrans)'.
+'./example_pictures/dcsf0118.jpg' without caption found for photo id 111827898; 'Coyote (Canis latrans)', time from observation 7 secs, distance from observation 72.38 meters, similarity 98.4%.
+./example_pictures/dcsf0118.jpg: Updating subject from 'None' to 'Coyote (Canis latrans)'.
+./example_pictures/dcsf0118.jpg: Updating caption from 'None' to 'Coyote (Canis latrans)'.
+'./example_pictures/dcsf0119.jpg' without caption found for photo id 111827912; 'Coyote (Canis latrans)', time from observation 58 secs, distance from observation 0.00 meters, similarity 98.7%.
+./example_pictures/dcsf0119.jpg: Updating subject from 'None' to 'Coyote (Canis latrans)'.
+./example_pictures/dcsf0119.jpg: Updating caption from 'None' to 'Coyote (Canis latrans)'.
 Not associated with a local picture: photo id 111827888, 5th photo of observation https://www.inaturalist.org/observations/68980359, 'Coyote (Canis latrans)'.
-'example_pictures/dcsf0124.jpg' without caption found for photo id 111753559; 'Milkmaids (Cardamine californica)', time from observation 18 secs, distance from observation 0.00 meters, similarity 98.3%.
-example_pictures/dcsf0124.jpg: Updating caption from 'None' to 'Milkmaids (Cardamine californica)'.
-'example_pictures/dcsf0123.jpg' without caption found for photo id 111753544; 'Milkmaids (Cardamine californica)', time from observation 12 secs, distance from observation 0.00 meters, similarity 98.7%.
-example_pictures/dcsf0123.jpg: Updating caption from 'None' to 'Milkmaids (Cardamine californica)'.
+Not associated with a local picture: photo id 111827935, 2nd photo of observation https://www.inaturalist.org/observations/68980359, 'Coyote (Canis latrans)'.
+'./example_pictures/dcsf0124.jpg' without caption found for photo id 111753559; 'Milkmaids (Cardamine californica)', time from observation 18 secs, distance from observation 0.00 meters, similarity 98.3%.
+./example_pictures/dcsf0124.jpg: Updating subject from 'None' to 'Milkmaids (Cardamine californica)'.
+./example_pictures/dcsf0124.jpg: Updating caption from 'None' to 'Milkmaids (Cardamine californica)'.
+'./example_pictures/dcsf0123.jpg' without caption found for photo id 111753544; 'Milkmaids (Cardamine californica)', time from observation 12 secs, distance from observation 0.00 meters, similarity 98.7%.
+./example_pictures/dcsf0123.jpg: Updating subject from 'None' to 'Milkmaids (Cardamine californica)'.
+./example_pictures/dcsf0123.jpg: Updating caption from 'None' to 'Milkmaids (Cardamine californica)'.
 
-Summary: 5 iNaturalist annotations added, 0 modified; 5 captions added, 0 updated in 11 seconds. 0 local photos and 2 iNaturalist photos without known association.
+Summary: 5 iNaturalist annotations added, 0 modified; 5 captions added, 0 updated in 15 seconds. 0 local photos and 2 iNaturalist photos without known association.
 ```
 
-This is excerpt from the html logfile generated by the above run:
+This is an excerpt from the html logfile generated by the above run:
 ![logfile](/images/logfile_successful_associations.png)
 
 The html logfile allows to visually verify that the correct photos have been
@@ -248,25 +253,31 @@ alternative to customizing this constant.
 
 `inat_photo.py` saves iNaturalist associations and captions to the local photos'
 metadata. iNaturalist associations are stored in `json` format as `EXIF` tag
-`UserComment`. Captions are stored as `IPTC` tag `Caption-Abstract`.
+`UserComment`. Subjects is stored as `XMP` tag `Subject`. Captions are
+stored as `IPTC` tag `Caption-Abstract`.
 
-This metadata can be displayed with command `exiftool -UserComment -Caption-Abstract *.jpg`:
+This metadata can be displayed with command `exiftool -UserComment -Subject -Caption-Abstract *.jpg`:
 
 ```
 ======== dcsf0118.jpg
 User Comment                    : {"iNaturalist": {"observation": 68980359, "photo": 111827898}}
+Subject                         : Coyote (Canis latrans)
 Caption-Abstract                : Coyote (Canis latrans)
 ======== dcsf0119_crop.jpg
 User Comment                    : {"iNaturalist": {"observation": 68980359, "photo": 111827921}}
+Subject                         : Coyote (Canis latrans)
 Caption-Abstract                : Coyote (Canis latrans)
 ======== dcsf0119.jpg
 User Comment                    : {"iNaturalist": {"observation": 68980359, "photo": 111827912}}
+Subject                         : Coyote (Canis latrans)
 Caption-Abstract                : Coyote (Canis latrans)
 ======== dcsf0123.jpg
 User Comment                    : {"iNaturalist": {"observation": 68939822, "photo": 111753544}}
+Subject                         : Milkmaids (Cardamine californica)
 Caption-Abstract                : Milkmaids (Cardamine californica)
 ======== dcsf0124.jpg
 User Comment                    : {"iNaturalist": {"observation": 68939822, "photo": 111753559}}
+Subject                         : Milkmaids (Cardamine californica)
 Caption-Abstract                : Milkmaids (Cardamine californica)
     5 image files read
 ```
