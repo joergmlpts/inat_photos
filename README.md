@@ -6,8 +6,8 @@ other organisms.
 This script `inat_photos.py` reads offline photos and finds the ones that have
 been uploaded to iNaturalist. It then annotatates these local photos with their
 location on iNaturalist (the observation and photo ids). It also pulls the
-identifications from iNaturalist and stores them as subjects and captions of the
-local photos.
+identifications from iNaturalist and stores them as subject and caption metadata
+of the local photos.
 
 `inat_photos.py` is a command-line tool that has been tested on Linux and
 Windows 10. It can be called as this on Linux
