@@ -136,7 +136,7 @@ pip uninstall pyexiftool
 ```
 
 and then first installed [git for Windows](https://gitforwindows.org/) and
-finally instelled the most recent `pyexiftool` from `github`:
+finally installed the most recent `pyexiftool` from `github`:
 
 ```
 pip install git+https://github.com/smarnach/pyexiftool.git
