@@ -24,7 +24,7 @@ THUMBNAIL_MAX = (256, 256)
 #
 
 API_HOST   = "https://api.inaturalist.org/v1"
-PHOTO_HOST = "https://static.inaturalist.org/photos"
+PHOTO_HOST = None
 
 CACHE_EXPIRATION  = 8 * 3600  # cache expires after 8 hours
 
@@ -152,6 +152,7 @@ def get_photo(id, size, bypass_cache=False):
         return response.content
     else:
         print(f"Error {response.status_code} while downloading photo {id}.")
+        print(response.text)
 
 #
 # Utility Functions
@@ -563,6 +564,7 @@ class iNat2LocalImages:
     # obtains observations of given date for given user; loads and returns
     # photos and computes image hashes of photos
     def photosFromObservations(self, date, user_login):
+        global PHOTO_HOST
         page = 1
         photos = []
         while True:
@@ -596,6 +598,10 @@ class iNat2LocalImages:
                              for photo in result["observation_photos"]} \
                                  if "observation_photos" in result \
                                  else {}
+
+                if PHOTO_HOST is None:
+                    url = result["observation_photos"][0]["photo"]["url"]
+                    PHOTO_HOST = '/'.join(url.split('/')[:-2])
 
                 obscured = latitude = longitude = None
                 if 'location' in result:
