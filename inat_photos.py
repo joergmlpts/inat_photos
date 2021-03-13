@@ -163,18 +163,17 @@ def get_photo(url, size, bypass_cache=False):
 def timeDifference(iNatPic, localPic):
     return int((iNatPic.getDateTime() - localPic.getDateTime()).total_seconds())
 
-# returns distance in meters between two lat/lon pairs
+# returns distance in meters between two lat/lon pairs, Haversine formula
 def distanceBetweenPoints(latLon1, latLon2):
     R = 6371e3  # Earth radius in meters
-    φ1 = latLon1[0] * math.pi/180
-    φ2 = latLon2[0] * math.pi/180
-    Δφ = (latLon2[0]-latLon1[0]) * math.pi/180
-    Δλ = (latLon2[1]-latLon1[1]) * math.pi/180
-    sinΔφ = math.sin(Δφ/2)
-    sinΔλ = math.sin(Δλ/2)
-    a = sinΔφ * sinΔφ + math.cos(φ1) * math.cos(φ2) * sinΔλ * sinΔλ
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    return R * c  # distance in meters
+    lat1Rad = latLon1[0]  * math.pi/180
+    lat2Rad = latLon2[0]  * math.pi/180
+    lon1Rad = latLon1[1]  * math.pi/180
+    lon2Rad = latLon2[1]  * math.pi/180
+    u = math.sin((lat2Rad - lat1Rad) / 2)
+    v = math.sin((lon2Rad - lon1Rad) / 2)
+    return 2.0 * R * math.asin(math.sqrt(u * u + math.cos(lat2Rad) *
+                                                 math.cos(lat1Rad) * v * v))
 
 # computes structural similarity score; returns float between 0.0 and 1.0
 def ssim(localPic, iNatPic):
