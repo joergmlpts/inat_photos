@@ -336,6 +336,9 @@ class iNatPhoto(Photo):
         return int(self.photo_url[self.photo_url.find('/photos/')+8:
                                   self.photo_url.find('/square.jpeg')])
 
+    def getPhotoUrl(self):
+        return self.photo_url
+
     def getPosition(self):
         if self.observation.numberOfPhotos() == 1:
             return 'only photo'
@@ -1044,9 +1047,9 @@ class iNat2LocalImages:
               'target="_blank"><img src="data:image/jpeg;base64, '
               f'{base64.b64encode(localImg).decode()}" '
               f'alt="{localPic}"></a><br />{caption}</td>'
-              f'<td style="text-align:center"><a href="{PHOTO_HOST}/'
-              f'{iNatPic.getPhotoId()}/original.jpg" target="_blank">'
-              '<img src="data:image/jpeg;base64, '
+              f'<td style="text-align:center"><a href="'
+              f'{iNatPic.getPhotoUrl().replace("square", "original")}"'
+              f'target="_blank"><img src="data:image/jpeg;base64, '
               f'{base64.b64encode(iNatImg).decode()}" '
               f'alt="{iNatPic}"></a><br />{iNatPic.getPosition()} of <a '
               'href="https:/www.inaturalist.org/observations/'
