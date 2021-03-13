@@ -24,7 +24,6 @@ THUMBNAIL_MAX = (256, 256)
 #
 
 API_HOST   = "https://api.inaturalist.org/v1"
-PHOTO_HOST = None
 
 CACHE_EXPIRATION  = 8 * 3600  # cache expires after 8 hours
 
@@ -116,8 +115,11 @@ def get_observations(bypass_cache=False, **kwargs):
     return cache[key][1]
 
 # retrieve iNaturalist photo
-def get_photo(id, size, bypass_cache=False):
+def get_photo(url, size, bypass_cache=False):
     assert size in ['original', 'large', 'medium', 'small', 'square']
+    assert url.find('square.jpeg') != -1
+    id = int(url[url.find('/photos/')+8:url.find('/square.jpeg')])
+    url = url.replace('square', size)
     photo_directory = os.path.join(photo_cache_dir, size)
     photo_filename = os.path.join(photo_directory, f'{id}.jpg')
     if not bypass_cache and os.path.exists(photo_filename):
@@ -127,7 +129,6 @@ def get_photo(id, size, bypass_cache=False):
         except:
             print(f"Error: Could not load photo from cache '{photo_filename}'.")
 
-    url = PHOTO_HOST + f'/{id}/{size}.jpg'
     delay = TOO_MANY_API_CALLS_DELAY
     while True:
         response = requests.get(url)
@@ -212,13 +213,13 @@ def scientific_name(caption):
 # coordinates. Geo coordinates may be obscured or unavailable.
 class Observation:
 
-    def __init__(self, id, taxon_id, scientific_name, common_name, photo_ids,
+    def __init__(self, id, taxon_id, scientific_name, common_name, photo_urls,
                  dateTime, obscured, latitude, longitude):
         self.id = id
         self.scientific_name = scientific_name
         self.common_name = common_name
         self.taxon_id = taxon_id
-        self.photo_ids = photo_ids
+        self.photo_urls = photo_urls
         self.dateTime = datetime.fromisoformat(dateTime).replace(tzinfo=None)
         self.obscured = obscured
         self.latLon = (latitude, longitude)
@@ -256,13 +257,13 @@ class Observation:
         return self.taxon_id
 
     def numberOfPhotos(self):
-        return len(self.photo_ids)
+        return len(self.photo_urls)
 
     # Returns list of iNatPhoto instances for this observation.
     def getPhotos(self):
         photos = []
-        for photo_id, position in self.photo_ids.items():
-            photo = iNatPhoto(photo_id, position, self)
+        for photo_url, position in self.photo_urls.items():
+            photo = iNatPhoto(photo_url, position, self)
             photos.append(photo)
         return photos
 
@@ -300,15 +301,15 @@ class Photo:
 # photo and computes image hashes.
 class iNatPhoto(Photo):
 
-    def __init__(self, id, position, observation):
+    def __init__(self, url, position, observation):
         super().__init__()
-        self.photo_id = id
+        self.photo_url = url
         self.position = position
         self.observation = observation
 
     def readImage(self, thumbNail=True):
-        return Image.open(io.BytesIO(get_photo(self.photo_id,
-                            'small' if thumbNail else SSIM_INATSIZE)))
+        return Image.open(io.BytesIO(get_photo(self.photo_url,
+                                'small' if thumbNail else SSIM_INATSIZE)))
 
     def load(self):
         self.computeImageHashes(self.readImage())
@@ -331,7 +332,9 @@ class iNatPhoto(Photo):
         return self.observation.getId()
 
     def getPhotoId(self):
-        return self.photo_id
+        assert self.photo_url.find('square.jpeg') != -1
+        return int(self.photo_url[self.photo_url.find('/photos/')+8:
+                                  self.photo_url.find('/square.jpeg')])
 
     def getPosition(self):
         if self.observation.numberOfPhotos() == 1:
@@ -345,7 +348,7 @@ class iNatPhoto(Photo):
         return self.observation.getName(html)
 
     def __str__(self):
-        return str(self.photo_id)
+        return str(self.getPhotoId())
 
 
 # Represent local photo, stores file name, date and optional caption, user
@@ -496,6 +499,11 @@ class iNat2LocalImages:
 
         if 'EXIF:UserComment' in metadata:
             userComment = metadata['EXIF:UserComment']
+        elif 'XMP:INaturalistObservationId' in metadata and \
+             'XMP:INaturalistPhotoId' in metadata:
+            userComment = '{"iNaturalist": {"observation": %d, "photo": %d}}' %\
+                          (metadata['XMP:INaturalistObservationId'],
+                           metadata['XMP:INaturalistPhotoId'])
 
         if 'EXIF:DateTimeOriginal' in metadata:
             exifDateTime = metadata['EXIF:DateTimeOriginal']
@@ -564,7 +572,6 @@ class iNat2LocalImages:
     # obtains observations of given date for given user; loads and returns
     # photos and computes image hashes of photos
     def photosFromObservations(self, date, user_login):
-        global PHOTO_HOST
         page = 1
         photos = []
         while True:
@@ -594,14 +601,10 @@ class iNat2LocalImages:
                 commonName = taxon["preferred_common_name"] \
                    if "preferred_common_name" in taxon else None
 
-                photoIds = {photo['photo']['id'] : photo['position']
+                photoUrls = {photo['photo']['url'] : photo['position']
                              for photo in result["observation_photos"]} \
                                  if "observation_photos" in result \
                                  else {}
-
-                if PHOTO_HOST is None:
-                    url = result["observation_photos"][0]["photo"]["url"]
-                    PHOTO_HOST = '/'.join(url.split('/')[:-2])
 
                 obscured = latitude = longitude = None
                 if 'location' in result:
@@ -613,7 +616,7 @@ class iNat2LocalImages:
 
                 observation = Observation(result["id"], taxon["id"],
                                           scientificName, commonName,
-                                          photoIds, dateTime,
+                                          photoUrls, dateTime,
                                           obscured, latitude, longitude)
 
                 # load the iNat photos and compute their image hashes
