@@ -117,8 +117,8 @@ def get_observations(bypass_cache=False, **kwargs):
 # retrieve iNaturalist photo
 def get_photo(url, size, bypass_cache=False):
     assert size in ['original', 'large', 'medium', 'small', 'square']
-    assert url.find('square.jpeg') != -1
-    id = int(url[url.find('/photos/')+8:url.find('/square.jpeg')])
+    assert url.find('square') != -1
+    id = int(url[url.find('/photos/')+8:url.find('/square')])
     url = url.replace('square', size)
     photo_directory = os.path.join(photo_cache_dir, size)
     photo_filename = os.path.join(photo_directory, f'{id}.jpg')
@@ -332,9 +332,9 @@ class iNatPhoto(Photo):
         return self.observation.getId()
 
     def getPhotoId(self):
-        assert self.photo_url.find('square.jpeg') != -1
+        assert self.photo_url.find('square') != -1
         return int(self.photo_url[self.photo_url.find('/photos/')+8:
-                                  self.photo_url.find('/square.jpeg')])
+                                  self.photo_url.find('/square')])
 
     def getPhotoUrl(self):
         return self.photo_url
