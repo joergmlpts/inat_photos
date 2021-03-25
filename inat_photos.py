@@ -501,7 +501,8 @@ class iNat2LocalImages:
 
         if 'EXIF:UserComment' in metadata:
             userComment = metadata['EXIF:UserComment']
-        elif 'XMP:INaturalistObservationId' in metadata and \
+        if (userComment is None or userComment == "") and \
+             'XMP:INaturalistObservationId' in metadata and \
              'XMP:INaturalistPhotoId' in metadata:
             userComment = '{"iNaturalist": {"observation": %d, "photo": %d}}' %\
                           (metadata['XMP:INaturalistObservationId'],
