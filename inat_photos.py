@@ -117,9 +117,9 @@ def get_observations(bypass_cache=False, **kwargs):
 # retrieve iNaturalist photo
 def get_photo(url, size, bypass_cache=False):
     assert size in ['original', 'large', 'medium', 'small', 'square']
-    assert url.find('square') != -1
-    id = int(url[url.find('/photos/')+8:url.find('/square')])
-    url = url.replace('square', size)
+    assert url.find('/square.') != -1
+    id = int(url[url.find('/photos/')+8:url.find('/square.')])
+    url = url.replace('/square.', '/' + size + '.')
     photo_directory = os.path.join(photo_cache_dir, size)
     photo_filename = os.path.join(photo_directory, f'{id}.jpg')
     if not bypass_cache and os.path.exists(photo_filename):
@@ -331,9 +331,9 @@ class iNatPhoto(Photo):
         return self.observation.getId()
 
     def getPhotoId(self):
-        assert self.photo_url.find('square') != -1
+        assert self.photo_url.find('/square.') != -1
         return int(self.photo_url[self.photo_url.find('/photos/')+8:
-                                  self.photo_url.find('/square')])
+                                  self.photo_url.find('/square.')])
 
     def getPhotoUrl(self):
         return self.photo_url
@@ -1048,7 +1048,7 @@ class iNat2LocalImages:
               f'{base64.b64encode(localImg).decode()}" '
               f'alt="{localPic}"></a><br />{caption}</td>'
               f'<td style="text-align:center"><a href="'
-              f'{iNatPic.getPhotoUrl().replace("square", "original")}"'
+              f'{iNatPic.getPhotoUrl().replace("/square.", "/original.")}"'
               f'target="_blank"><img src="data:image/jpeg;base64, '
               f'{base64.b64encode(iNatImg).decode()}" '
               f'alt="{iNatPic}"></a><br />{iNatPic.getPosition()} of <a '
