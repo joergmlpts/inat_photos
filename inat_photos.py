@@ -507,6 +507,11 @@ class iNat2LocalImages:
             userComment = '{"iNaturalist": {"observation": %d, "photo": %d}}' %\
                           (metadata['XMP:INaturalistObservationId'],
                            metadata['XMP:INaturalistPhotoId'])
+        if (userComment is None or userComment == "") and \
+             'XMP:Observation' in metadata and \
+             'XMP:ObservationPhoto' in metadata and 'XMP:Photo' in metadata:
+            userComment = '{"iNaturalist": {"observation": %d, "photo": %d}}' %\
+                          (metadata['XMP:Observation'], metadata['XMP:Photo'])
 
         if 'EXIF:DateTimeOriginal' in metadata:
             exifDateTime = metadata['EXIF:DateTimeOriginal']
