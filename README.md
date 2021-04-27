@@ -252,7 +252,7 @@ alternative to customizing this constant.
 ## Metadata
 
 `inat_photo.py` saves iNaturalist associations and captions to the local photos'
-metadata. iNaturalist associations are stored in tags are named `observation`,
+metadata. iNaturalist associations are stored in tags named `observation`,
 `observationPhoto`, and `photo` in an `XMP` namespace `iNaturalist`. These tags
 can be set to numeric ids and string uuids. This script sets them to the numeric
 ids. Subjects is stored as `XMP` tag `Subject`. Captions are stored as `IPTC`
