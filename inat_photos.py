@@ -2,7 +2,8 @@
 
 USE_GPU = False # change to True if you have a GPU
 
-import argparse, base64, io, json, math, os, pickle, re, shelve, sys, time
+import argparse, base64, io, json, math, os, pickle, re, shelve, \
+       subprocess, sys, time
 from datetime import datetime
 import requests                   # on Ubuntu install with "sudo apt install python3-requests"
 from PIL import Image             # on Ubuntu install with "sudo apt install python3-pil"
@@ -18,6 +19,11 @@ SSIM_INATSIZE     = 'large' # iNaturalist picture size to use with ssim
 
 EXIF_Orientation = 274
 THUMBNAIL_MAX = (256, 256)
+
+INSTALL_DIR = os.path.dirname(sys.argv[0])
+if os.path.islink(sys.argv[0]):
+    INSTALL_DIR = os.path.join(INSTALL_DIR,
+                               os.path.dirname(os.readlink(sys.argv[0])))
 
 #
 # iNaturalist API
@@ -212,13 +218,13 @@ def scientific_name(caption):
 # coordinates. Geo coordinates may be obscured or unavailable.
 class Observation:
 
-    def __init__(self, id, taxon_id, scientific_name, common_name, photo_urls,
+    def __init__(self, id, taxon_id, scientific_name, common_name, photos,
                  dateTime, obscured, latitude, longitude):
         self.id = id
         self.scientific_name = scientific_name
         self.common_name = common_name
         self.taxon_id = taxon_id
-        self.photo_urls = photo_urls
+        self.photos = photos
         self.dateTime = datetime.fromisoformat(dateTime).replace(tzinfo=None)
         self.obscured = obscured
         self.latLon = (latitude, longitude)
@@ -256,13 +262,13 @@ class Observation:
         return self.taxon_id
 
     def numberOfPhotos(self):
-        return len(self.photo_urls)
+        return len(self.photos)
 
     # Returns list of iNatPhoto instances for this observation.
     def getPhotos(self):
         photos = []
-        for photo_url, position in self.photo_urls.items():
-            photo = iNatPhoto(photo_url, position, self)
+        for photo_url, obs_photo, position in self.photos:
+            photo = iNatPhoto(photo_url, obs_photo, position, self)
             photos.append(photo)
         return photos
 
@@ -296,13 +302,14 @@ class Photo:
     def freeImageHashes(self):
         self.imageHashes = None
 
-# Represents iNaturalist photo, stores photo id, links observation, downloads
-# photo and computes image hashes.
+# Represents iNaturalist photo, stores photo url, observation photo id,
+# links observation, downloads photo and computes image hashes.
 class iNatPhoto(Photo):
 
-    def __init__(self, url, position, observation):
+    def __init__(self, url, obsPhotoId, position, observation):
         super().__init__()
         self.photo_url = url
+        self.observationPhotoId = obsPhotoId
         self.position = position
         self.observation = observation
 
@@ -329,6 +336,9 @@ class iNatPhoto(Photo):
 
     def getObservationId(self):
         return self.observation.getId()
+
+    def getObservationPhotoId(self):
+        return self.observationPhotoId
 
     def getPhotoId(self):
         assert self.photo_url.find('/square.') != -1
@@ -359,23 +369,20 @@ class iNatPhoto(Photo):
 class LocalPhoto(Photo):
 
     def __init__(self, filename, dateTime, orientation, subject, caption,
-                 userComment, thumbnailOffset, thumbnailLength, latitude,
-                 longitude):
+                 iNatObservation, iNatObservationPhoto, iNatPhoto,
+                 thumbnailOffset, thumbnailLength, latitude, longitude):
         super().__init__()
         self.filename = filename
         self.dateTime = datetime.fromisoformat(dateTime)
         self.orientation = orientation
         self.subject = subject
         self.caption = caption
-        self.userComment = userComment
+        self.iNatObservation = iNatObservation
+        self.iNatObservationPhoto = iNatObservationPhoto
+        self.iNatPhoto = iNatPhoto
         self.thumbnailOffset = thumbnailOffset
         self.thumbnailLength = thumbnailLength
         self.latLon = (latitude, longitude)
-        self.json = None
-        if userComment is not None and len(userComment) and \
-           ((userComment[0] == '{' and userComment[-1] == '}') or \
-           (userComment[0] == '[' and userComment[-1] == ']')):
-            self.json = json.loads(userComment)
 
     def readImage(self, thumbNail=True):
         if thumbNail and self.thumbnailOffset and self.thumbnailLength:
@@ -410,11 +417,14 @@ class LocalPhoto(Photo):
     def getLatLon(self):
         return self.latLon
 
-    def getComment(self):
-        return self.userComment
+    def getINatObservation(self):
+        return self.iNatObservation
 
-    def getJson(self):
-        return self.json
+    def getINatObservationPhoto(self):
+        return self.iNatObservationPhoto
+
+    def getINatPhoto(self):
+        return self.iNatPhoto
 
     def getFilename(self):
         return self.filename
@@ -459,9 +469,12 @@ class iNat2LocalImages:
         self.no_inat_updates = self.no_caption_updates = \
             self.no_subject_updates = 0
         self.no_unmatched_localPhotos = self.no_unmatched_iNatPhotos = 0
-        self.exiftool_success = b'1 image files updated\r\n' \
-                                if sys.platform == 'win32' \
-                                else b'1 image files updated\n'
+        self.exiftool_success = '1 image files updated'
+        self.exiftool_config = os.path.join(INSTALL_DIR, 'exiftool.config')
+        if not os.path.exists(self.exiftool_config):
+            print(f"Error: File '{self.exiftool_config}' does not exist.",
+                  file=sys.stderr)
+            sys.exit(1)
 
     def isDuplicate(self, fname):
         stat = os.stat(fname)
@@ -478,7 +491,8 @@ class iNat2LocalImages:
         if self.isDuplicate(fullPath):
             return
 
-        subject = caption = orientation = exifDateTime = userComment = None
+        subject = caption = orientation = exifDateTime = None
+        iNatObservation = iNatObservationPhoto = iNatPhoto = None
         latitude = longitude = None
         metadata = self.exiftool.get_metadata(fullPath)
 
@@ -501,17 +515,39 @@ class iNat2LocalImages:
 
         if 'EXIF:UserComment' in metadata:
             userComment = metadata['EXIF:UserComment']
-        if (userComment is None or userComment == "") and \
-             'XMP:INaturalistObservationId' in metadata and \
-             'XMP:INaturalistPhotoId' in metadata:
-            userComment = '{"iNaturalist": {"observation": %d, "photo": %d}}' %\
-                          (metadata['XMP:INaturalistObservationId'],
-                           metadata['XMP:INaturalistPhotoId'])
-        if (userComment is None or userComment == "") and \
-             'XMP:Observation' in metadata and \
-             'XMP:ObservationPhoto' in metadata and 'XMP:Photo' in metadata:
-            userComment = '{"iNaturalist": {"observation": %d, "photo": %d}}' %\
-                          (metadata['XMP:Observation'], metadata['XMP:Photo'])
+            if userComment != "" and \
+               userComment[0] == '{' and userComment[-1] == '}':
+                jsn = json.loads(userComment)
+                if 'iNaturalist' in jsn:
+                    jsn = jsn['iNaturalist']
+                    if 'observation' in jsn and 'photo' in jsn:
+                        # replace UserComment json with iNaturalist tags
+                        iNatObservation = jsn['observation']
+                        iNatPhoto = jsn['photo']
+                        args = [ f'"{self.exiftool.executable}"', '-config',
+                                 f'"{self.exiftool_config}"',
+                                 f'-XMP-iNaturalist:observation={jsn["observation"]}',
+                                 f'-XMP-iNaturalist:photo={jsn["photo"]}',
+                                 '-UserComment=', '-m', f'"{fullPath}"' ]
+                        args = ' '.join(args)
+                        rsl = subprocess.check_output(args, shell=True)
+                        if rsl.decode().strip() != self.exiftool_success:
+                            raise Exception(f'exiftool error: {rsl.decode()}')
+
+        if 'XMP:INaturalistObservationId' in metadata:
+            # digiKam tags Xmp.digiKam.iNaturalistObservationId ...
+            iNatObservation = metadata['XMP:INaturalistObservationId']
+            iNatObservationPhoto = metadata['XMP:INaturalistObservationPhotoId']
+            iNatPhoto = metadata['XMP:INaturalistPhotoId']
+
+        if 'XMP:Observation' in metadata and \
+           ('XMP:Photo' in metadata or 'XMP:ObservationPhoto' in metadata):
+            # iNaturalist tags Xmp.iNaturalist.observation ...
+            iNatObservation = metadata['XMP:Observation']
+            if 'XMP:ObservationPhoto' in metadata:
+                iNatObservationPhoto = metadata['XMP:ObservationPhoto']
+            if 'XMP:Photo' in metadata:
+                iNatPhoto = metadata['XMP:Photo']
 
         if 'EXIF:DateTimeOriginal' in metadata:
             exifDateTime = metadata['EXIF:DateTimeOriginal']
@@ -534,8 +570,9 @@ class iNat2LocalImages:
             thumbnailLength = metadata['EXIF:ThumbnailLength']
 
         picture = LocalPhoto(fullPath, exifDateTime, orientation, subject,
-                             caption, userComment, thumbnailOffset,
-                             thumbnailLength, latitude, longitude)
+                             caption, iNatObservation, iNatObservationPhoto,
+                             iNatPhoto, thumbnailOffset, thumbnailLength,
+                             latitude, longitude)
 
         exifDate = exifDateTime[:10]
         if exifDate in self.localPicts:
@@ -548,7 +585,7 @@ class iNat2LocalImages:
             print('.', end='')
             sys.stdout.flush()
 
-    # Recursive directory traverse function, finds local images on disk and
+    # Recursive directory traversal function, finds local images on disk and
     # reads their exif data.
     def getLocalImages(self, directory):
 
@@ -609,7 +646,8 @@ class iNat2LocalImages:
                 commonName = taxon["preferred_common_name"] \
                    if "preferred_common_name" in taxon else None
 
-                photoUrls = {photo['photo']['url'] : photo['position']
+                photoUrls = {(photo['photo']['url'], photo['id'],
+                              photo['position'])
                              for photo in result["observation_photos"]} \
                                  if "observation_photos" in result \
                                  else {}
@@ -673,11 +711,8 @@ class iNat2LocalImages:
             if not self.recompute:
                 newLocalPics = []
                 for localPic in localPics:
-                    if localPic.getJson() is not None and \
-                       'iNaturalist' in localPic.getJson() and \
-                       'photo' in localPic.getJson()['iNaturalist']:
-                        skipPhotos[localPic.getJson()['iNaturalist']
-                                   ['photo']] = localPic
+                    if localPic.getINatPhoto() is not None:
+                        skipPhotos[localPic.getINatPhoto()] = localPic
                     else:
                         newLocalPics.append(localPic)
                 localPics = newLocalPics
@@ -936,6 +971,25 @@ class iNat2LocalImages:
 
         if ssimScore >= self.ssim_threshold:
             args = []
+            needSubprocess = False
+            if localPic.getINatObservation() is None or \
+               (localPic.getINatObservationPhoto() is None and
+                localPic.getINatPhoto() is None) or \
+               localPic.getINatObservation() != iNatPic.getObservationId() or \
+               localPic.getINatObservationPhoto() != \
+               iNatPic.getObservationPhotoId() or \
+               localPic.getINatPhoto() != iNatPic.getPhotoId():
+                args.append('-config')
+                args.append(f'"{self.exiftool_config}"'),
+                args.append(f'-XMP-iNaturalist:observation={iNatPic.getObservationId()}')
+                args.append(f'-XMP-iNaturalist:observationPhoto={iNatPic.getObservationPhotoId()}')
+                args.append(f'-XMP-iNaturalist:photo={iNatPic.getPhotoId()}')
+                args.append('-UserComment=')
+                if localPic.getINatObservation() is not None:
+                    self.no_inat_updates += 1
+                else:
+                    self.no_inat_new += 1
+                needSubprocess = True
             if (subject is None or subject != identification):
                 if subject is None:
                     self.no_subject_new += 1
@@ -943,7 +997,10 @@ class iNat2LocalImages:
                     self.no_subject_updates += 1
                 print(f"{localPic.getFilename()}: Updating subject from "
                       f"'{subject}' to '{identification}'.")
-                args.append(('-Subject='+identification).encode())
+                if needSubprocess:
+                    args.append(f'-Subject="{identification}"')
+                else:
+                    args.append('-Subject=' + identification)
             if self.captions and (caption is None or caption != identification):
                 if caption is None:
                     self.no_caption_new += 1
@@ -951,25 +1008,21 @@ class iNat2LocalImages:
                     self.no_caption_updates += 1
                 print(f"{localPic.getFilename()}: Updating caption from "
                       f"'{caption}' to '{identification}'.")
-                args.append(('-Caption-Abstract='+identification).encode())
-            iNatJson = { 'observation' : iNatPic.getObservationId(),
-                         'photo'       : iNatPic.getPhotoId() }
-            if not localPic.getJson() or \
-               not 'iNaturalist' in localPic.getJson() or \
-               localPic.getJson()['iNaturalist'] != iNatJson:
-                localJson = localPic.getJson() \
-                               if localPic.getJson() is not None else {}
-                if 'iNaturalist' in localJson:
-                    self.no_inat_updates += 1
+                if needSubprocess:
+                    args.append(f'-Caption-Abstract="{identification}"')
                 else:
-                    self.no_inat_new += 1
-                localJson['iNaturalist'] = iNatJson
-                args.append(('-UserComment='+json.dumps(localJson)).encode())
+                    args.append('-Caption-Abstract=' + identification)
             if len(args):
-                args.append(b'-m')
-                args.append(localPic.getFilename().encode())
-                rsl = self.exiftool.execute(*args)
-                if rsl != self.exiftool_success:
+                args.append('-m')
+                if needSubprocess:
+                    args.append(f'"{localPic.getFilename()}"')
+                    args.insert(0, f'"{self.exiftool.executable}"')
+                    args = ' '.join(args)
+                    rsl = subprocess.check_output(args, shell=True)
+                else:
+                    args.append(localPic.getFilename())
+                    rsl = self.exiftool.execute(*[a.encode() for a in args])
+                if rsl.decode().strip() != self.exiftool_success:
                     raise Exception(f'exiftool error: {rsl.decode()}')
 
     # updates the caption of a local photo with the observation's identification
@@ -998,7 +1051,7 @@ class iNat2LocalImages:
             args.append(b'-m')
             args.append(localPic.getFilename().encode())
             rsl = self.exiftool.execute(*args)
-            if rsl != self.exiftool_success:
+            if rsl.decode().strip() != self.exiftool_success:
                 raise Exception(f'exiftool error: {rsl.decode()}')
 
     def writeLogHeader(self, picture_args):

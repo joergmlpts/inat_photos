@@ -204,9 +204,8 @@ observations.
 
 Options `-c` and `--captions` instructs `inat_photo.py` to pull identifications
 from iNaturalist observations and write them as captions to local photos.
-Captions of local photos are stored as `IPTC` tag `Caption-Abstract`, a tag
-supported by Google Photos and other services. By default, the captions are not
-written.
+Captions of local photos are stored as `IPTC` tag `Caption-Abstract`. By
+default, the captions are not written.
 
 ### Option -r, --recompute
 
@@ -215,7 +214,8 @@ associations between local and iNaturalist photos and recompute them.
 
 ## Constants in the Code
 
-A few constants in the code can also be customized. The constants are found near the top of the file:
+A few constants in the code can also be customized. The constants are found
+near the top of the file:
 
 ```
 USE_GPU = False               # change to True if you have a GPU
@@ -252,38 +252,44 @@ alternative to customizing this constant.
 ## Metadata
 
 `inat_photo.py` saves iNaturalist associations and captions to the local photos'
-metadata. iNaturalist associations are stored in `json` format as `EXIF` tag
-`UserComment`. Subjects is stored as `XMP` tag `Subject`. Captions are
-stored as `IPTC` tag `Caption-Abstract`.
+metadata. iNaturalist associations are stored in tags are named `observation`,
+`observationPhoto`, and `photo` in an `XMP` namespace `iNaturalist`. These tags
+can be set to numeric ids and string uuids. This script sets them to the numeric
+ids. Subjects is stored as `XMP` tag `Subject`. Captions are stored as `IPTC`
+tag `Caption-Abstract`.
 
-This metadata can be displayed with command `exiftool -UserComment -Subject -Caption-Abstract *.jpg`:
+This metadata can be displayed with command `exiftool -XMP-iNaturalist:observation -XMP-iNaturalist:observationPhoto -XMP-iNaturalist:photo -Subject -Caption-Abstract *.jpg`:
 
 ```
 ======== dcsf0118.jpg
-User Comment                    : {"iNaturalist": {"observation": 68980359, "photo": 111827898}}
+Observation                     : 68980359
+Observation Photo               : 104339085
+Photo                           : 111827898
 Subject                         : Coyote (Canis latrans)
 Caption-Abstract                : Coyote (Canis latrans)
 ======== dcsf0119_crop.jpg
-User Comment                    : {"iNaturalist": {"observation": 68980359, "photo": 111827921}}
+Observation                     : 68980359
+Observation Photo               : 104339082
+Photo                           : 111827921
 Subject                         : Coyote (Canis latrans)
 Caption-Abstract                : Coyote (Canis latrans)
 ======== dcsf0119.jpg
-User Comment                    : {"iNaturalist": {"observation": 68980359, "photo": 111827912}}
+Observation                     : 68980359
+Observation Photo               : 104339084
+Photo                           : 111827912
 Subject                         : Coyote (Canis latrans)
 Caption-Abstract                : Coyote (Canis latrans)
 ======== dcsf0123.jpg
-User Comment                    : {"iNaturalist": {"observation": 68939822, "photo": 111753544}}
+Observation                     : 68939822
+Observation Photo               : 104269804
+Photo                           : 111753544
 Subject                         : Milkmaids (Cardamine californica)
 Caption-Abstract                : Milkmaids (Cardamine californica)
 ======== dcsf0124.jpg
-User Comment                    : {"iNaturalist": {"observation": 68939822, "photo": 111753559}}
+Observation                     : 68939822
+Observation Photo               : 104269803
+Photo                           : 111753559
 Subject                         : Milkmaids (Cardamine californica)
 Caption-Abstract                : Milkmaids (Cardamine californica)
     5 image files read
 ```
-
-The `json` for iNaturalist can be one of several photo associations.
-Associations for other websites are supported as well. For instance, another
-association may be present for [Calflora](https://www.calflora.org). In this
-case, `inat_photo.py` does not touch the association for Calflora; only an
-association for iNaturalist is added or modified.
