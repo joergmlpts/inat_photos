@@ -13,6 +13,8 @@ from SSIM_PIL import compare_ssim # on Ubuntu install with "pip3 install SSIM-PI
 if USE_GPU:
     import pyopencl # on Ubuntu install with "pip3 install python3-pyopencl"
 
+from pyinaturalist import node_api # install with "pip3 install pyinaturalist"
+
 CLUSTER_THRESHOLD = 180     # 3 minutes
 SSIM_THRESHOLD    = 0.95    # 95%, ssim threshold to consider pictures identical
 SSIM_INATSIZE     = 'large' # iNaturalist picture size to use with ssim
@@ -29,35 +31,6 @@ if os.path.islink(sys.argv[0]):
 # iNaturalist API
 #
 
-API_HOST   = "https://api.inaturalist.org/v1"
-
-CACHE_EXPIRATION  = 8 * 3600  # cache expires after 8 hours
-
-TOO_MANY_API_CALLS_DELAY = 60   # wait this many seconds after error 429
-
-api_time  = 0      # time of last api call sequence
-api_count = 0      # number of calls in current api call sequence
-API_MAX_CALLS = 60 # max 60 calls per minute
-API_INTERVAL  = 60 # 1 minute
-
-# if necessary wait to avoid more than API_MAX_CALLS in API_INTERVAL
-def api_call_delay():
-    global api_time
-    global api_count
-
-    tim = time.time()
-    if tim > api_time + API_INTERVAL:
-        api_time = tim
-        api_count = 1
-    else:
-        api_count += 1
-        if api_count > API_MAX_CALLS:
-            print ('Throttling API calls, sleeping for %.1f seconds.' %
-                   (API_INTERVAL - (tim - api_time)))
-            time.sleep(API_INTERVAL - (tim - api_time))
-            api_time = time.time()
-            api_count = 1
-
 if sys.platform == 'win32':
     cache_dir  = os.path.join(os.path.expanduser('~'),
                               'AppData', 'Local', 'inat_api')
@@ -67,75 +40,42 @@ else:
 if not os.path.exists(cache_dir):
     os.makedirs(cache_dir)
 
-cache = shelve.open(os.path.join(cache_dir, 'api.cache'))
-
 photo_cache_dir = os.path.join(cache_dir, 'photos')
 if not os.path.exists(photo_cache_dir):
     os.makedirs(photo_cache_dir)
 
 # lookup iNaturalist user_login; called to check command-line argument -u
-def get_user(user_login, bypass_cache=False):
-    url = API_HOST + f'/users/{user_login}'
-    tim = time.time()
-    cache_expiration = 0 if bypass_cache else CACHE_EXPIRATION
-    if not url in cache or cache[url][0] < tim - cache_expiration:
-        headers = { 'Content-type' : 'application/json',
-                    'User-Agent'   : None }
-        delay = TOO_MANY_API_CALLS_DELAY
-        while True:
-            api_call_delay()
-            response = requests.get(url, headers=headers)
-            if response.status_code == requests.codes.too_many:
-                time.sleep(delay)
-                delay *= 2
-            else:
-                break
-        if response.status_code == requests.codes.ok:
-            cache[url] = (tim, response.json())
-        else:
-            return None
-    return cache[url][1]
+def get_user(user_login):
+    try:
+        r = node_api.node_api_get(f'users/{user_login}')
+        r.raise_for_status()
+        return r.json()
+    except:
+        return None
 
 # retrieve iNaturalist observations
-def get_observations(bypass_cache=False, **kwargs):
-    url = API_HOST + '/observations'
-    key = pickle.dumps((url, kwargs)).hex()
-    tim = time.time()
-    cache_expiration = 0 if bypass_cache else CACHE_EXPIRATION
-    if not key in cache or cache[key][0] < tim - cache_expiration:
-        headers = { 'Content-type' : 'application/json' }
-        delay = TOO_MANY_API_CALLS_DELAY
-        while True:
-            api_call_delay()
-            response = requests.get(url, headers=headers, params=kwargs)
-            if response.status_code == requests.codes.too_many:
-                time.sleep(delay)
-                delay *= 2
-            else:
-                break
-        if response.status_code == requests.codes.ok:
-            cache[key] = (tim, response.json())
-        else:
-            print(response.status_code)
-            return None
-    return cache[key][1]
+def get_observations(**kwargs):
+    try:
+        return node_api.get_all_observations(**kwargs)
+    except:
+        return None
 
 # retrieve iNaturalist photo
-def get_photo(url, size, bypass_cache=False):
+def get_photo(url, size):
     assert size in ['original', 'large', 'medium', 'small', 'square']
     assert url.find('/square.') != -1
     id = int(url[url.find('/photos/')+8:url.find('/square.')])
     url = url.replace('/square.', '/' + size + '.')
     photo_directory = os.path.join(photo_cache_dir, size)
     photo_filename = os.path.join(photo_directory, f'{id}.jpg')
-    if not bypass_cache and os.path.exists(photo_filename):
+    if os.path.exists(photo_filename):
         try:
             with open(photo_filename, 'rb') as file:
                 return file.read()
         except:
             print(f"Error: Could not load photo from cache '{photo_filename}'.")
 
-    delay = TOO_MANY_API_CALLS_DELAY
+    delay = 60
     while True:
         response = requests.get(url)
         if response.status_code == requests.codes.too_many:
@@ -453,9 +393,8 @@ class iNat2LocalImages:
     IMG_EXTS = ['jpg', 'jpeg', 'png', 'tif', 'tiff']
 
     def __init__(self, user_login, captions, recompute,
-                 cluster_threshold, ssim_threshold, bypass_cache):
+                 cluster_threshold, ssim_threshold):
         self.user_login = user_login
-        self.bypass_cache = bypass_cache
         self.captions = captions
         self.recompute = recompute
         self.localPicts = {}
@@ -617,60 +556,50 @@ class iNat2LocalImages:
     # obtains observations of given date for given user; loads and returns
     # photos and computes image hashes of photos
     def photosFromObservations(self, date, user_login):
-        page = 1
         photos = []
-        while True:
-            results = get_observations(bypass_cache=self.bypass_cache,
-                                       page=page, per_page=100,
-                                       user_login=user_login,
-                                       photos='true', day=date[8:],
-                                       month=date[5:7], year=date[:4])
-            for result in results["results"]:
-                #print (json.dumps(result, indent=4))
-                taxon = result["taxon"]
-                scientificName = taxon["name"]
-                if taxon["rank"] == "subspecies":
-                    # insert ssp.
-                    scientificName = ' ssp. '.join(scientificName.rsplit(' ',
-                                                                         1))
-                elif taxon["rank"] == "variety":
-                    # insert var.
-                    scientificName = ' var. '.join(scientificName.rsplit(' ',
-                                                                         1))
-                elif taxon["rank"] == "genus":
-                    # append sp.
-                    scientificName += ' sp.'
+        results = get_observations(user_login=user_login,
+                                   photos='true', day=date[8:],
+                                   month=date[5:7], year=date[:4])
+        for result in results:
+            #print (json.dumps(result, indent=4))
+            taxon = result["taxon"]
+            scientificName = taxon["name"]
+            if taxon["rank"] == "subspecies":
+                # insert ssp.
+                scientificName = ' ssp. '.join(scientificName.rsplit(' ', 1))
+            elif taxon["rank"] == "variety":
+                # insert var.
+                scientificName = ' var. '.join(scientificName.rsplit(' ', 1))
+            elif taxon["rank"] == "genus":
+                # append sp.
+                scientificName += ' sp.'
 
-                dateTime = result["time_observed_at"]
+            dateTime = result["time_observed_at"]
 
-                commonName = taxon["preferred_common_name"] \
-                   if "preferred_common_name" in taxon else None
+            commonName = taxon["preferred_common_name"] \
+               if "preferred_common_name" in taxon else None
 
-                photoUrls = {(photo['photo']['url'], photo['id'],
-                              photo['position'])
-                             for photo in result["observation_photos"]} \
-                                 if "observation_photos" in result \
-                                 else {}
+            photoUrls = {(photo['photo']['url'], photo['id'],
+                          photo['position'])
+                         for photo in result["observation_photos"]} \
+                             if "observation_photos" in result \
+                             else {}
 
-                obscured = latitude = longitude = None
-                if 'location' in result:
-                    obscured = result["obscured"]
-                    location = result["location"].split(',')
-                    assert len(location) == 2
-                    latitude = float(location[0])
-                    longitude = float(location[1])
+            obscured = latitude = longitude = None
+            if 'location' in result:
+                location = result["location"]
+                assert len(location) == 2
+                latitude = float(location[0])
+                longitude = float(location[1])
 
-                observation = Observation(result["id"], taxon["id"],
-                                          scientificName, commonName,
-                                          photoUrls, dateTime,
-                                          obscured, latitude, longitude)
+            observation = Observation(result["id"], taxon["id"],
+                                      scientificName, commonName,
+                                      photoUrls, dateTime,
+                                      obscured, latitude, longitude)
 
-                # load the iNat photos and compute their image hashes
-                photos += observation.getPhotos()
+            # load the iNat photos and compute their image hashes
+            photos += observation.getPhotos()
 
-            if page * results['per_page'] >= results['total_results']:
-                break
-            page += 1
         return photos
 
     def process(self, picture_args, logfile):
@@ -1201,9 +1130,6 @@ if __name__ == '__main__':
                         required=False, default=SSIM_THRESHOLD,
                         help='structural similarity score threshold to accept '
                         'candidates')
-    parser.add_argument('--bypass_cache', '-b', action="store_true",
-                        help='do not use cached api responses even if '
-                        'they have not yet expired')
     parser.add_argument('--captions', '-c', action="store_true",
                         help='save identifications as captions')
     parser.add_argument('--recompute', '-r', action="store_true",
@@ -1214,11 +1140,9 @@ if __name__ == '__main__':
                         metavar='file/directory',
                         help='picture files or directories')
 
-
     args = parser.parse_args()
 
     inat2imgs = iNat2LocalImages(args.user, args.captions, args.recompute,
-                                 args.cluster_threshold, args.ssim_threshold,
-                                 args.bypass_cache)
+                                 args.cluster_threshold, args.ssim_threshold)
 
     inat2imgs.process(args.pictures, args.logfile)

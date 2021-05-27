@@ -106,7 +106,7 @@ distributions with these two commands:
 
 ```
 sudo apt install python3 python3-pip python3-requests python3-pil python3-scipy python3-pyopencl libimage-exiftool-perl
-sudo pip3 install pyexiftool imagehash SSIM-PIL
+sudo pip3 install pyexiftool imagehash SSIM-PIL pyinaturalist
 ```
 
 where `python3-pyopencl` is only needed to run `inat_photos.py` with GPU
@@ -121,7 +121,7 @@ renaming `exiftool(-k).exe` to `exiftool.exe` and placing it in `C:\Windows\`.
 In addition to `exiftool`, these Python packages need to be installed:
 
 ```
-pip install requests pillow pyexiftool imagehash pyopencl SSIM-PIL
+pip install requests pillow pyexiftool imagehash pyopencl SSIM-PIL pyinaturalist
 ```
 
 `pyexiftool` did not work for me on Windows after I installed it with `pip` as
@@ -161,7 +161,6 @@ optional arguments:
                         threshold used in clusters based on time of day
   --ssim_threshold SSIM_THRESHOLD
                         structural similarity score threshold to accept candidates
-  --bypass_cache, -b    do not use cached api responses even if they have not yet expired
   --captions, -c        save identifications as captions
   --recompute, -r       recompute already known associations for photos
   --logfile LOGFILE     write html logfile
@@ -193,13 +192,6 @@ when the structural siomilariry score of these photos is at least 0.95. Option
 specified as a number between 0 and 1.0 or as a percentage. The default is 0.95
 or 95%.
 
-### Option -b, --bypass_cache
-
-By default, `inat_photo.py` caches iNaturalist observations for 8 hours before
-they will be loaded again. Options `-b` and `--bypass_cache` instruct
-`inat_photo.py` to bypass the cache and issue api calls to re-load iNaturalist
-observations.
-
 ### Option -c, --captions
 
 Options `-c` and `--captions` instructs `inat_photo.py` to pull identifications
@@ -224,8 +216,6 @@ CLUSTER_THRESHOLD = 180       # 3 minutes
 SSIM_THRESHOLD    = 0.95      # 95%, ssim threshold to consider pictures identical
 
 SSIM_INATSIZE     = 'large'   # iNaturalist picture size to use with ssim
-
-CACHE_EXPIRATION  = 8 * 3600  # cache expires after 8 hours
 ```
 
 The constants `CLUSTER_THRESHOLD` and `SSIM_THRESHOLD` are the defaults for
@@ -243,11 +233,6 @@ quality of results. If this size is lowered, the structural similarity score
 needs to be lowered as well, e.g. `SSIM_INATSIZE = 'small'` and
 `SSIM_THRESHOLD = 0.8` is a setting that provides a very significant speedup
 while still finding roughly the same number of associations.
-
-Constant `CACHE_EXPIRATION` is the age in seconds when a cache entry of an
-iNaturalist observation expires. The default is 8 hours. Lowering this number
-increases network traffic. Command-line option `--bypass_cache` is an
-alternative to customizing this constant.
 
 ## Metadata
 
