@@ -57,7 +57,8 @@ def get_user(user_login):
 def get_observations(**kwargs):
     try:
         return node_api.get_all_observations(**kwargs)
-    except:
+    except Exception as e:
+        print('Cannot get observations:', e)
         return None
 
 # retrieve iNaturalist photo
