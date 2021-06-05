@@ -447,27 +447,6 @@ class iNat2LocalImages:
         if 'XMP:Subject' in metadata:
             subject = metadata['XMP:Subject']
 
-        if 'EXIF:UserComment' in metadata:
-            userComment = metadata['EXIF:UserComment']
-            if userComment != "" and \
-               userComment[0] == '{' and userComment[-1] == '}':
-                jsn = json.loads(userComment)
-                if 'iNaturalist' in jsn:
-                    jsn = jsn['iNaturalist']
-                    if 'observation' in jsn and 'photo' in jsn:
-                        # replace UserComment json with iNaturalist tags
-                        iNatObservation = jsn['observation']
-                        iNatPhoto = jsn['photo']
-                        args = [ f'"{self.exiftool.executable}"', '-config',
-                                 f'"{self.exiftool_config}"',
-                                 f'-XMP-iNaturalist:observation={jsn["observation"]}',
-                                 f'-XMP-iNaturalist:photo={jsn["photo"]}',
-                                 '-UserComment=', '-m', f'"{fullPath}"' ]
-                        args = ' '.join(args)
-                        rsl = subprocess.check_output(args, shell=True)
-                        if rsl.decode().strip() != self.exiftool_success:
-                            raise Exception(f'exiftool error: {rsl.decode()}')
-
         if 'XMP:INaturalistObservationId' in metadata:
             # digiKam tags Xmp.digiKam.iNaturalistObservationId ...
             iNatObservation = metadata['XMP:INaturalistObservationId']
