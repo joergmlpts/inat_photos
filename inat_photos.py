@@ -473,9 +473,6 @@ class iNat2LocalImages:
                   f"using file modification time '{exifDateTime}'.")
         exifDateTime = exifDateTime[:10].replace(':', '-') + exifDateTime[10:]
 
-        if 'IPTC:Caption-Abstract' in metadata:
-            caption = metadata['IPTC:Caption-Abstract']
-
         thumbnailOffset = thumbnailLength = None
         if 'EXIF:ThumbnailLength' in metadata and \
            'EXIF:ThumbnailOffset' in metadata:
@@ -1006,7 +1003,7 @@ class iNat2LocalImages:
         summary = f"Summary: {self.no_inat_new} iNaturalist annotation" \
                   f"{'' if self.no_inat_new == 1 else 's'} added, " \
                   f"{self.no_inat_updates} modified"
-        if self.no_subject_new or no_subject_updates:
+        if self.no_subject_new or self.no_subject_updates:
             summary += f'; {self.no_subject_new} identification' \
                        f"{'' if self.no_subject_new == 1 else 's'} added, " \
                        f'{self.no_subject_updates} modified'
