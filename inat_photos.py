@@ -1027,6 +1027,10 @@ class iNat2LocalImages:
         summary = f"Summary: {self.no_inat_new} iNaturalist annotation" \
                   f"{'' if self.no_inat_new == 1 else 's'} added, " \
                   f"{self.no_inat_updates} modified"
+        if self.no_subject_new or no_subject_updates:
+            summary += f'; {self.no_subject_new} identification' \
+                       f"{'' if self.no_subject_new == 1 else 's'} added, " \
+                       f'{self.no_subject_updates} modified'
         summary += f' in {runTime:.0f} seconds.'
         if self.no_unmatched_localPhotos or self.no_unmatched_iNatPhotos:
             summary += f" {self.no_unmatched_localPhotos} local photo" \
