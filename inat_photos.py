@@ -304,12 +304,12 @@ class iNatPhoto(Photo):
         return str(self.getPhotoId())
 
 
-# Represent local photo, stores file name, date and optional caption, user
-# user comment, latitude and longitude and loads and computes image hashes.
+# Represent local photo, stores file name, date and optional subject,
+# latitude and longitude and loads and computes image hashes.
 # Thumbnails, if present, are loaded instead of large pictures.
 class LocalPhoto(Photo):
 
-    def __init__(self, filename, dateTime, orientation, subject, caption,
+    def __init__(self, filename, dateTime, orientation, subject,
                  iNatObservation, iNatObservationPhoto, iNatPhoto,
                  thumbnailOffset, thumbnailLength, latitude, longitude):
         super().__init__()
@@ -317,7 +317,6 @@ class LocalPhoto(Photo):
         self.dateTime = datetime.fromisoformat(dateTime)
         self.orientation = orientation
         self.subject = subject
-        self.caption = caption
         self.iNatObservation = iNatObservation
         self.iNatObservationPhoto = iNatObservationPhoto
         self.iNatPhoto = iNatPhoto
@@ -379,9 +378,6 @@ class LocalPhoto(Photo):
     def getSubject(self):
         return self.subject
 
-    def getCaption(self):
-        return self.caption
-
     def __str__(self):
         return self.filename
 
@@ -393,10 +389,9 @@ class iNat2LocalImages:
 
     IMG_EXTS = ['jpg', 'jpeg', 'png', 'tif', 'tiff']
 
-    def __init__(self, user_login, captions, recompute,
+    def __init__(self, user_login, recompute,
                  cluster_threshold, ssim_threshold):
         self.user_login = user_login
-        self.captions = captions
         self.recompute = recompute
         self.localPicts = {}
         self.exiftool = exiftool.ExifTool()
@@ -405,9 +400,8 @@ class iNat2LocalImages:
         self.logfile = None
         self.cluster_threshold = cluster_threshold
         self.ssim_threshold = ssim_threshold
-        self.no_inat_new = self.no_caption_new = self.no_subject_new = 0
-        self.no_inat_updates = self.no_caption_updates = \
-            self.no_subject_updates = 0
+        self.no_inat_new = self.no_subject_new = 0
+        self.no_inat_updates = self.no_subject_updates = 0
         self.no_unmatched_localPhotos = self.no_unmatched_iNatPhotos = 0
         self.exiftool_success = '1 image files updated'
         self.exiftool_config = os.path.join(INSTALL_DIR, 'exiftool.config')
@@ -431,7 +425,7 @@ class iNat2LocalImages:
         if self.isDuplicate(fullPath):
             return
 
-        subject = caption = orientation = exifDateTime = None
+        subject = orientation = exifDateTime = None
         iNatObservation = iNatObservationPhoto = iNatPhoto = None
         latitude = longitude = None
         metadata = self.exiftool.get_metadata(fullPath)
@@ -510,7 +504,7 @@ class iNat2LocalImages:
             thumbnailLength = metadata['EXIF:ThumbnailLength']
 
         picture = LocalPhoto(fullPath, exifDateTime, orientation, subject,
-                             caption, iNatObservation, iNatObservationPhoto,
+                             iNatObservation, iNatObservationPhoto,
                              iNatPhoto, thumbnailOffset, thumbnailLength,
                              latitude, longitude)
 
@@ -847,10 +841,10 @@ class iNat2LocalImages:
 
     # A candicate pair has been found. This member function reports it,
     # computes the structural similarity and if the iNat and local photos
-    # are indeed identical, updates the local photos metadata (exif).
+    # are indeed identical, updates the local photo's metadata.
     def reportCandicate(self, iNatPic, localPic):
         if iNatPic is None:
-            caption = localPic.getCaption()
+            caption = localPic.getSubject()
             caption = ", caption '" + caption + "'" if caption else ''
             print("Not associated with an iNaturalist photo: "
                   f"'{localPic}'{caption}.")
@@ -866,7 +860,6 @@ class iNat2LocalImages:
 
         identification = iNatPic.name()
         subject = localPic.getSubject()
-        caption = localPic.getCaption()
 
         timeDiff = abs(timeDifference(iNatPic, localPic))
         diff = f', time from observation {timeDiff} secs'
@@ -885,11 +878,11 @@ class iNat2LocalImages:
         ssimScore = ssim(localPic, iNatPic)
         ssimStr = f", similarity {ssimScore*100:.1f}%"
 
-        if caption and scientific_name(caption) == \
+        if subject and scientific_name(subject) == \
                        scientific_name(identification):
             print(f"'{localPic}' caption contains identification for photo id "
                   f"{iNatPic}{diff}{dist}{ssimStr}.")
-        elif caption:
+        elif subject:
             print(f"'{localPic}' found for photo id {iNatPic}; "
                   f"identification '{identification}', "
                   f"current caption '{caption}'{diff}{dist}{ssimStr}.")
@@ -931,17 +924,6 @@ class iNat2LocalImages:
                     args.append(f'-Subject="{identification}"')
                 else:
                     args.append('-Subject=' + identification)
-            if self.captions and (caption is None or caption != identification):
-                if caption is None:
-                    self.no_caption_new += 1
-                else:
-                    self.no_caption_updates += 1
-                print(f"{localPic.getFilename()}: Updating caption from "
-                      f"'{caption}' to '{identification}'.")
-                if needSubprocess:
-                    args.append(f'-Caption-Abstract="{identification}"')
-                else:
-                    args.append('-Caption-Abstract=' + identification)
             if len(args):
                 args.append('-m')
                 if needSubprocess:
@@ -959,9 +941,9 @@ class iNat2LocalImages:
     def updateCaption(self, localPic, iNatPic):
         identification = iNatPic.name()
         subject = localPic.getSubject()
-        caption = localPic.getCaption()
         args = []
         if (subject is None or subject != identification):
+            args.append(b'-m')
             if subject is None:
                 self.no_subject_new += 1
             else:
@@ -969,16 +951,6 @@ class iNat2LocalImages:
             print(f"{localPic.getFilename()}: Updating subject from "
                   f"'{subject}' to '{identification}'.")
             args.append(('-Subject='+identification).encode())
-        if self.captions and (caption is None or caption != identification):
-            if caption is None:
-                self.no_caption_new += 1
-            else:
-                self.no_caption_updates += 1
-            print(f"{localPic.getFilename()}: Updating caption from "
-                  f"'{caption}' to '{identification}'.")
-            args.append(('-Caption-Abstract='+identification).encode())
-        if len(args):
-            args.append(b'-m')
             args.append(localPic.getFilename().encode())
             rsl = self.exiftool.execute(*args)
             if rsl.decode().strip() != self.exiftool_success:
@@ -1027,7 +999,7 @@ class iNat2LocalImages:
             img.save(iNatIO, 'JPEG') # iNat image as bytestring
             iNatImg = iNatIO.getvalue()
         red = ';color:Red' if ssimScore < self.ssim_threshold else ''
-        caption = localPic.getCaption()
+        caption = localPic.getSubject()
         if caption is None:
             caption = '<i>no caption</i>'
         print('<tr><td style="text-align:center">'
@@ -1055,10 +1027,6 @@ class iNat2LocalImages:
         summary = f"Summary: {self.no_inat_new} iNaturalist annotation" \
                   f"{'' if self.no_inat_new == 1 else 's'} added, " \
                   f"{self.no_inat_updates} modified"
-        if self.captions:
-            summary += f"; {self.no_caption_new} caption" \
-                      f"{'' if self.no_caption_new == 1 else 's'} added, " \
-                      f"{self.no_caption_updates} updated"
         summary += f' in {runTime:.0f} seconds.'
         if self.no_unmatched_localPhotos or self.no_unmatched_iNatPhotos:
             summary += f" {self.no_unmatched_localPhotos} local photo" \
@@ -1131,8 +1099,6 @@ if __name__ == '__main__':
                         required=False, default=SSIM_THRESHOLD,
                         help='structural similarity score threshold to accept '
                         'candidates')
-    parser.add_argument('--captions', '-c', action="store_true",
-                        help='save identifications as captions')
     parser.add_argument('--recompute', '-r', action="store_true",
                         help='recompute already known associations for photos')
     parser.add_argument('--logfile', type=argparse.FileType('w'),
@@ -1143,7 +1109,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    inat2imgs = iNat2LocalImages(args.user, args.captions, args.recompute,
+    inat2imgs = iNat2LocalImages(args.user, args.recompute,
                                  args.cluster_threshold, args.ssim_threshold)
 
     inat2imgs.process(args.pictures, args.logfile)
