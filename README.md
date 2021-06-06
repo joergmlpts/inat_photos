@@ -9,20 +9,13 @@ location on iNaturalist (the observation and photo ids). It also pulls the
 identifications from iNaturalist and stores them in the metadata of the local
 photos.
 
-`inat_photos.py` is a command-line tool that has been tested on Linux and
-Windows 10. It can be called as this on Linux
+`inat_photos.py` is a command-line tool. It can be called as this on Linux
 
 ```
 ./inat_photos.py --user joergmlpts --logfile mylogfile.html ./example_pictures
 ```
 
-and like this on Windows
-
-```
-python.exe .\inat_photos.py --user joergmlpts --logfile mylogfile.html .\example_pictures
-```
-
-where `joergmlpts` is a user login for iNaturalist, , a logfile called
+where `joergmlpts` is a user login for iNaturalist, a logfile called
 `mylogfile.html` will be written, and `example_pictures` is a directory of
 pictures.
 
@@ -94,47 +87,17 @@ Summary: 0 iNaturalist annotations added, 0 modified in 0 seconds. 0 local photo
 ## Dependencies
 
 This code has been written in Python. It uses f-strings and hence needs Python
-3.6 or later. It requires `exiftool` to read and write the metadata of pictures.
+3.6 or later. It requires `py3exiv2` to read and write the metadata of pictures.
 All necessary packages can be installed on Ubuntu Linux and other Debian-style
 distributions with these two commands:
 
 ```
-sudo apt install python3 python3-pip python3-requests python3-pil python3-scipy python3-pyopencl libimage-exiftool-perl
-sudo pip3 install pyexiftool imagehash SSIM-PIL pyinaturalist
+sudo apt install python3 python3-pip python3-requests python3-pil python3-scipy libexiv2-dev libboost-python-dev python3-pyopencl
+sudo pip3 install py3exiv2 imagehash SSIM-PIL pyinaturalist
 ```
 
 where `python3-pyopencl` is only needed to run `inat_photos.py` with GPU
 support.
-
-## Windows and other Operating Systems
-
-First of all, `exiftool` needs to be installed. It can be downloaded from
-[its website](https://exiftool.org/). The `exiftool` variant for command-line
-use is needed; on Windows, the installation involves downloading a zip and
-renaming `exiftool(-k).exe` to `exiftool.exe` and placing it in `C:\Windows\`.
-In addition to `exiftool`, these Python packages need to be installed:
-
-```
-pip install requests pillow pyexiftool imagehash pyopencl SSIM-PIL pyinaturalist
-```
-
-`pyexiftool` did not work for me on Windows after I installed it with `pip` as
-described above. `inat_photos.py` died with error
-`OSError: [WinError 10038] An operation was attempted on something that is not a socket`.
-This turned out to be a [known issue](https://github.com/smarnach/pyexiftool/issues/26)
-on Windows and I could work around it by uninstalling the version installed
-with `pip`:
-
-```
-pip uninstall pyexiftool
-```
-
-and then first installed [git for Windows](https://gitforwindows.org/) and
-finally installed the most recent `pyexiftool` from `github`:
-
-```
-pip install git+https://github.com/smarnach/pyexiftool.git
-```
 
 ## Command-line Arguments
 

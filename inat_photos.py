@@ -2,12 +2,11 @@
 
 USE_GPU = False # change to True if you have a GPU
 
-import argparse, base64, io, json, math, os, pickle, re, shelve, \
-       subprocess, sys, time
+import argparse, base64, io, json, math, os, re, sys, time
 from datetime import datetime
 import requests                   # on Ubuntu install with "sudo apt install python3-requests"
 from PIL import Image             # on Ubuntu install with "sudo apt install python3-pil"
-import exiftool                   # on Ubuntu install with "sudo apt install libimage-exiftool-perl" and "pip3 install pyexiftool"
+import pyexiv2                    # on Ubuntu install with "sudo apt install libexiv2-dev libboost-python-dev" and "pip3 install py3exiv2"
 import imagehash                  # on Ubuntu install with "sudo apt install python3-scipy" and "pip3 install imagehash"
 from SSIM_PIL import compare_ssim # on Ubuntu install with "pip3 install SSIM-PIL"
 if USE_GPU:
@@ -59,7 +58,7 @@ def get_observations(**kwargs):
         return node_api.get_all_observations(**kwargs)
     except Exception as e:
         print('Cannot get observations:', e)
-        return None
+        sys.exit(1)
 
 # retrieve iNaturalist photo
 def get_photo(url, size):
@@ -105,6 +104,11 @@ def get_photo(url, size):
 #
 # Utility Functions
 #
+
+# for latitude/longitude: degrees, minutes, seconds --> float
+def getDegrees(fractions):
+    return float(fractions.value[0]) + float(fractions.value[1]) / 60.0 + \
+           float(fractions.value[2]) / 3600.0
 
 # returns difference in seconds between photo and observation dates
 def timeDifference(iNatPic, localPic):
@@ -311,24 +315,21 @@ class LocalPhoto(Photo):
 
     def __init__(self, filename, dateTime, orientation, subject,
                  iNatObservation, iNatObservationPhoto, iNatPhoto,
-                 thumbnailOffset, thumbnailLength, latitude, longitude):
+                 thumbnail, latitude, longitude):
         super().__init__()
         self.filename = filename
-        self.dateTime = datetime.fromisoformat(dateTime)
+        self.dateTime = datetime.fromisoformat(dateTime).replace(tzinfo=None)
         self.orientation = orientation
         self.subject = subject
         self.iNatObservation = iNatObservation
         self.iNatObservationPhoto = iNatObservationPhoto
         self.iNatPhoto = iNatPhoto
-        self.thumbnailOffset = thumbnailOffset
-        self.thumbnailLength = thumbnailLength
+        self.thumbnail = thumbnail
         self.latLon = (latitude, longitude)
 
     def readImage(self, thumbNail=True):
-        if thumbNail and self.thumbnailOffset and self.thumbnailLength:
-            with open(self.filename, 'rb') as file:
-                file.seek(self.thumbnailOffset)
-                image = Image.open(io.BytesIO(file.read(self.thumbnailLength)))
+        if thumbNail and self.thumbnail:
+            image = Image.open(io.BytesIO(bytes(self.thumbnail.data)))
         else:
             image = Image.open(self.filename)
             if thumbNail:
@@ -394,8 +395,6 @@ class iNat2LocalImages:
         self.user_login = user_login
         self.recompute = recompute
         self.localPicts = {}
-        self.exiftool = exiftool.ExifTool()
-        self.exiftool.start()
         self.allFiles = set()
         self.logfile = None
         self.cluster_threshold = cluster_threshold
@@ -403,12 +402,8 @@ class iNat2LocalImages:
         self.no_inat_new = self.no_subject_new = 0
         self.no_inat_updates = self.no_subject_updates = 0
         self.no_unmatched_localPhotos = self.no_unmatched_iNatPhotos = 0
-        self.exiftool_success = '1 image files updated'
-        self.exiftool_config = os.path.join(INSTALL_DIR, 'exiftool.config')
-        if not os.path.exists(self.exiftool_config):
-            print(f"Error: File '{self.exiftool_config}' does not exist.",
-                  file=sys.stderr)
-            sys.exit(1)
+        pyexiv2.xmp.register_namespace('https://inaturalist.org/ns/1.0/',
+                                       'iNaturalist')
 
     def isDuplicate(self, fname):
         stat = os.stat(fname)
@@ -416,7 +411,7 @@ class iNat2LocalImages:
         if key in self.allFiles:
             print(f"'{fullPath}' already included.")
             return True
-        self.allFiles.add(stat)
+        self.allFiles.add(key)
         return False
 
     # Reads exif data of local image on disk.
@@ -428,61 +423,76 @@ class iNat2LocalImages:
         subject = orientation = exifDateTime = None
         iNatObservation = iNatObservationPhoto = iNatPhoto = None
         latitude = longitude = None
-        metadata = self.exiftool.get_metadata(fullPath)
+        metadata = pyexiv2.metadata.ImageMetadata(fullPath)
+        metadata.read()
 
-        if 'EXIF:GPSLatitude' in metadata and \
-           'EXIF:GPSLatitudeRef' in metadata and \
-           'EXIF:GPSLongitudeRef' in metadata and \
-           'EXIF:GPSLongitude' in metadata:
-            latitude = float(metadata['EXIF:GPSLatitude'])
-            if metadata['EXIF:GPSLatitudeRef'] == 'S':
+        if 'Exif.GPSInfo.GPSLatitude' in metadata and \
+           'Exif.GPSInfo.GPSLatitudeRef' in metadata and \
+           'Exif.GPSInfo.GPSLongitudeRef' in metadata and \
+           'Exif.GPSInfo.GPSLongitude' in metadata:
+            latitude = getDegrees(metadata['Exif.GPSInfo.GPSLatitude'])
+            if metadata['Exif.GPSInfo.GPSLatitudeRef'].value[0] in 'Ss':
                 latitude = -latitude
-            longitude = float(metadata['EXIF:GPSLongitude'])
-            if metadata['EXIF:GPSLongitudeRef'] == 'W':
+            longitude = getDegrees(metadata['Exif.GPSInfo.GPSLongitude'])
+            if metadata['Exif.GPSInfo.GPSLongitudeRef'].value[0] in 'Ww':
                 longitude = -longitude
 
-        if 'EXIF:Orientation' in metadata:
-            orientation = metadata['EXIF:Orientation']
+        if 'Exif.Image.Orientation' in metadata:
+            orientation = int(metadata['Exif.Image.Orientation'].value)
 
-        if 'XMP:Subject' in metadata:
-            subject = metadata['XMP:Subject']
+        if 'Xmp.dc.subject' in metadata:
+            subject = metadata['Xmp.dc.subject'].value[0]
 
-        if 'XMP:INaturalistObservationId' in metadata:
+        if 'Xmp.digiKam.iNaturalistObservationId' in metadata:
             # digiKam tags Xmp.digiKam.iNaturalistObservationId ...
-            iNatObservation = metadata['XMP:INaturalistObservationId']
-            iNatObservationPhoto = metadata['XMP:INaturalistObservationPhotoId']
-            iNatPhoto = metadata['XMP:INaturalistPhotoId']
+            iNatObservation = metadata['Xmp.digiKam.'
+                                       'iNaturalistObservationId'].value
+            if iNatObservation.isdigit():
+                iNatObservation = int(iNatObservation)
+            iNatObservationPhoto = metadata['Xmp.digiKam.'
+                                        'iNaturalistObservationPhotoId'].value
+            if iNatObservationPhoto.isdigit():
+                iNatObservationPhoto = int(iNatObservationPhoto)
+            iNatPhoto = metadata['Xmp.digiKam.iNaturalistPhotoId'].value
+            if iNatPhoto.isdigit():
+                iNatPhoto = int(iNatPhoto)
 
-        if 'XMP:Observation' in metadata and \
-           ('XMP:Photo' in metadata or 'XMP:ObservationPhoto' in metadata):
+        if 'Xmp.iNaturalist.observation' in metadata and \
+           ('Xmp.iNaturalist.photo' in metadata or
+            'Xmp.iNaturalist.observationPhoto' in metadata):
             # iNaturalist tags Xmp.iNaturalist.observation ...
-            iNatObservation = metadata['XMP:Observation']
-            if 'XMP:ObservationPhoto' in metadata:
-                iNatObservationPhoto = metadata['XMP:ObservationPhoto']
-            if 'XMP:Photo' in metadata:
-                iNatPhoto = metadata['XMP:Photo']
+            iNatObservation = metadata['Xmp.iNaturalist.observation'].value
+            if iNatObservation.isdigit():
+                iNatObservation = int(iNatObservation)
+            if 'Xmp.iNaturalist.observationPhoto' in metadata:
+                iNatObservationPhoto = metadata[
+                    'Xmp.iNaturalist.observationPhoto'].value
+                if iNatObservationPhoto.isdigit():
+                    iNatObservationPhoto = int(iNatObservationPhoto)
+            if 'Xmp.iNaturalist.photo' in metadata:
+                iNatPhoto = metadata['Xmp.iNaturalist.photo'].value
+                if iNatPhoto.isdigit():
+                    iNatPhoto = int(iNatPhoto)
 
-        if 'EXIF:DateTimeOriginal' in metadata:
-            exifDateTime = metadata['EXIF:DateTimeOriginal']
+        if 'Exif.Photo.DateTimeOriginal' in metadata:
+            exifDateTime = metadata['Exif.Photo.DateTimeOriginal'].value
         else:
-            exifDateTime = metadata['File:FileModifyDate'][:19]
+            exifDateTime = datetime.fromtimestamp(os.path.getmtime(fullPath))
             if self.dots:
                 print()
                 self.dots = False
             print(f"'{fullPath}': EXIF tag 'Date/Time Original' is missing; "
                   f"using file modification time '{exifDateTime}'.")
-        exifDateTime = exifDateTime[:10].replace(':', '-') + exifDateTime[10:]
+        exifDateTime = exifDateTime.isoformat(sep=' ')
 
-        thumbnailOffset = thumbnailLength = None
-        if 'EXIF:ThumbnailLength' in metadata and \
-           'EXIF:ThumbnailOffset' in metadata:
-            thumbnailOffset = metadata['EXIF:ThumbnailOffset']
-            thumbnailLength = metadata['EXIF:ThumbnailLength']
+        thumbnail = None
+        if 'Exif.Thumbnail.JPEGInterchangeFormat' in metadata and \
+           'Exif.Thumbnail.JPEGInterchangeFormatLength' in metadata:
+            thumbnail = pyexiv2.exif.ExifThumbnail(metadata)
 
         picture = LocalPhoto(fullPath, exifDateTime, orientation, subject,
-                             iNatObservation, iNatObservationPhoto,
-                             iNatPhoto, thumbnailOffset, thumbnailLength,
-                             latitude, longitude)
+                             iNatObservation, iNatObservationPhoto, iNatPhoto,
+                             thumbnail, latitude, longitude)
 
         exifDate = exifDateTime[:10]
         if exifDate in self.localPicts:
@@ -532,7 +542,6 @@ class iNat2LocalImages:
                                    photos='true', day=date[8:],
                                    month=date[5:7], year=date[:4])
         for result in results:
-            #print (json.dumps(result, indent=4))
             taxon = result["taxon"]
             scientificName = taxon["name"]
             if taxon["rank"] == "subspecies":
@@ -556,12 +565,18 @@ class iNat2LocalImages:
                              if "observation_photos" in result \
                              else {}
 
-            obscured = latitude = longitude = None
+            latitude = longitude = None
             if 'location' in result:
                 location = result["location"]
                 assert len(location) == 2
                 latitude = float(location[0])
                 longitude = float(location[1])
+
+            obscured = False
+            if 'obscured' in result:
+                obscured = result['obscured']
+            elif 'taxon_geoprivacy' in result:
+                obscured = result['taxon_geoprivacy'] == 'obscured'
 
             observation = Observation(result["id"], taxon["id"],
                                       scientificName, commonName,
@@ -686,11 +701,7 @@ class iNat2LocalImages:
                 self.reportCandicate(None, localPics[j])
                 j += 1
 
-        self.exiftool.terminate()
         self.writeLogTrailer(time.time()-startTime)
-
-    def __del__(self):
-        self.exiftool.terminate()
 
     # Compare lists of local pics with list of iNat observation pics.
     def compareCluster(self, localPics, iNatPics):
@@ -869,8 +880,7 @@ class iNat2LocalImages:
         self.writeLogLine(localPic, iNatPic, timeDiff, distance, ssimScore)
 
         if ssimScore >= self.ssim_threshold:
-            args = []
-            needSubprocess = False
+            changes = [] # list of (tag, value) pairs
             if localPic.getINatObservation() is None or \
                (localPic.getINatObservationPhoto() is None and
                 localPic.getINatPhoto() is None) or \
@@ -878,17 +888,15 @@ class iNat2LocalImages:
                localPic.getINatObservationPhoto() != \
                iNatPic.getObservationPhotoId() or \
                localPic.getINatPhoto() != iNatPic.getPhotoId():
-                args.append('-config')
-                args.append(f'"{self.exiftool_config}"'),
-                args.append(f'-XMP-iNaturalist:observation={iNatPic.getObservationId()}')
-                args.append(f'-XMP-iNaturalist:observationPhoto={iNatPic.getObservationPhotoId()}')
-                args.append(f'-XMP-iNaturalist:photo={iNatPic.getPhotoId()}')
-                args.append('-UserComment=')
+                changes.append(('Xmp.iNaturalist.observation',
+                             iNatPic.getObservationId()))
+                changes.append(('Xmp.iNaturalist.observationPhoto',
+                             iNatPic.getObservationPhotoId()))
+                changes.append(('Xmp.iNaturalist.photo', iNatPic.getPhotoId()))
                 if localPic.getINatObservation() is not None:
                     self.no_inat_updates += 1
                 else:
                     self.no_inat_new += 1
-                needSubprocess = True
             if (subject is None or subject != identification):
                 if subject is None:
                     self.no_subject_new += 1
@@ -896,41 +904,39 @@ class iNat2LocalImages:
                     self.no_subject_updates += 1
                 print(f"{localPic.getFilename()}: Updating subject from "
                       f"'{subject}' to '{identification}'.")
-                if needSubprocess:
-                    args.append(f'-Subject="{identification}"')
-                else:
-                    args.append('-Subject=' + identification)
-            if len(args):
-                args.append('-m')
-                if needSubprocess:
-                    args.append(f'"{localPic.getFilename()}"')
-                    args.insert(0, f'"{self.exiftool.executable}"')
-                    args = ' '.join(args)
-                    rsl = subprocess.check_output(args, shell=True)
-                else:
-                    args.append(localPic.getFilename())
-                    rsl = self.exiftool.execute(*[a.encode() for a in args])
-                if rsl.decode().strip() != self.exiftool_success:
-                    raise Exception(f'exiftool error: {rsl.decode()}')
+                changes.append(('Xmp.dc.subject', [identification]))
+            if len(changes):
+                metadata = pyexiv2.metadata.ImageMetadata(localPic.
+                                                          getFilename())
+                metadata.read()
+                for tag, value in changes:
+                    metadata[tag] = str(value) if isinstance(value, int) \
+                                               else value
+                try:
+                    metadata.write(preserve_timestamps=False)
+                except Exception as e:
+                    print("ERROR: Cannot update metadata:", e, file=sys.stderr)
+                    sys.exit(1)
 
     # updates the caption of a local photo with the observation's identification
     def updateCaption(self, localPic, iNatPic):
         identification = iNatPic.name()
         subject = localPic.getSubject()
-        args = []
         if (subject is None or subject != identification):
-            args.append(b'-m')
+            print(f"{localPic.getFilename()}: Updating subject from "
+                  f"'{subject}' to '{identification}'.")
+            metadata = pyexiv2.metadata.ImageMetadata(localPic.getFilename())
+            metadata.read()
+            metadata['Xmp.dc.subject'] = [identification]
+            try:
+                metadata.write(preserve_timestamps=False)
+            except Exception as e:
+                print("ERROR: Cannot update metadata:", e, file=sys.stderr)
+                sys.exit(1)
             if subject is None:
                 self.no_subject_new += 1
             else:
                 self.no_subject_updates += 1
-            print(f"{localPic.getFilename()}: Updating subject from "
-                  f"'{subject}' to '{identification}'.")
-            args.append(('-Subject='+identification).encode())
-            args.append(localPic.getFilename().encode())
-            rsl = self.exiftool.execute(*args)
-            if rsl.decode().strip() != self.exiftool_success:
-                raise Exception(f'exiftool error: {rsl.decode()}')
 
     def writeLogHeader(self, picture_args):
         if self.logfile is None:
@@ -1060,8 +1066,8 @@ def argCheck(arg):
     if os.path.isfile(arg) and \
        arg.split('.')[-1].lower() in iNat2LocalImages.IMG_EXTS:
         return arg
-    raise argparse.ArgumentTypeError(f"'{arg}' is not a picture file "
-                                     "or directory.")
+    raise argparse.ArgumentTypeError(f"'{arg}' is neither a picture file "
+                                     "nor a directory.")
 
 #
 # Parse command-line and invoke above functionality.
