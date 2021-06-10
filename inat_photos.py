@@ -443,20 +443,6 @@ class iNat2LocalImages:
         if 'Xmp.dc.subject' in metadata:
             subject = metadata['Xmp.dc.subject'].value[0]
 
-        if 'Xmp.digiKam.iNaturalistObservationId' in metadata:
-            # digiKam tags Xmp.digiKam.iNaturalistObservationId ...
-            iNatObservation = metadata['Xmp.digiKam.'
-                                       'iNaturalistObservationId'].value
-            if iNatObservation.isdigit():
-                iNatObservation = int(iNatObservation)
-            iNatObservationPhoto = metadata['Xmp.digiKam.'
-                                        'iNaturalistObservationPhotoId'].value
-            if iNatObservationPhoto.isdigit():
-                iNatObservationPhoto = int(iNatObservationPhoto)
-            iNatPhoto = metadata['Xmp.digiKam.iNaturalistPhotoId'].value
-            if iNatPhoto.isdigit():
-                iNatPhoto = int(iNatPhoto)
-
         if 'Xmp.iNaturalist.observation' in metadata and \
            ('Xmp.iNaturalist.photo' in metadata or
             'Xmp.iNaturalist.observationPhoto' in metadata):
