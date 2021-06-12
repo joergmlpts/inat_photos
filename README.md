@@ -99,6 +99,18 @@ sudo pip3 install py3exiv2 imagehash SSIM-PIL pyinaturalist
 where `python3-pyopencl` is only needed to run `inat_photos.py` with GPU
 support.
 
+## Windows and other Operating Systems
+
+Most of the dependencies can be installed with this command:
+
+```
+pip install requests pillow imagehash pyopencl SSIM-PIL pyinaturalist
+```
+
+where `pyopencl` is only needed to run `inat_photos.py` with GPU support.
+
+On Windows package `py3exiv2` cannot simply be installed with `pip`. [This fork](https://github.com/auphofBSF/py3exiv2) of `py3exiv2` has support and installation instructions for Windows 10.
+
 ## Command-line Arguments
 
 This script is a command-line tool. It is called with options, file names and
