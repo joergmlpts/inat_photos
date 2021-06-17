@@ -858,7 +858,7 @@ class iNat2LocalImages:
         elif subject:
             print(f"'{localPic}' found for photo id {iNatPic}; "
                   f"identification '{identification}', "
-                  f"current caption '{caption}'{diff}{dist}{ssimStr}.")
+                  f"current caption '{subject}'{diff}{dist}{ssimStr}.")
         else:
             print(f"'{localPic}' without caption found for photo id {iNatPic}; "
                   f"'{identification}'{diff}{dist}{ssimStr}.")
